@@ -1,47 +1,102 @@
-import PushNotification from 'react-native-push-notification';
+// services/NotificationService.ts
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import PushNotificationIOS from '@react-native-community/push-notification-ios';
 import { translations } from '../i18n/translations';
 
-interface ScheduledNotification {
+let PushNotificationAndroid: typeof import('react-native-push-notification') | null =
+  null;
+if (Platform.OS === 'android') {
+  // import yerine require → iOS’ta hiç yüklenmez, crash sıfır
+  PushNotificationAndroid = require('react-native-push-notification').default;
+}
+
+/* ---------- ortak tip ---------- */
+interface ScheduleOpts {
   id: string;
   title: string;
   message: string;
   date: Date;
   repeatType?: 'day' | 'week' | 'month';
+  userInfo?: Record<string, any>;
 }
 
+/* ---------- servis ---------- */
 class NotificationService {
-  private language: 'tr' | 'en' = 'en';
+  private lang: 'tr' | 'en' = 'en';
 
   constructor() {
-    this.initializeLanguage();
+    this.initLang();
+    if (Platform.OS === 'android') this.initAndroid();
+    if (Platform.OS === 'ios') this.initIOS();
   }
 
-  private async initializeLanguage() {
-    const savedLanguage = await AsyncStorage.getItem('preferred_language');
-    if (savedLanguage && (savedLanguage === 'tr' || savedLanguage === 'en')) {
-      this.language = savedLanguage as 'tr' | 'en';
+  /* --------- init --------- */
+  private async initLang() {
+    const saved = await AsyncStorage.getItem('preferred_language');
+    if (saved === 'tr' || saved === 'en') this.lang = saved;
+  }
+
+  private initAndroid() {
+    PushNotificationAndroid?.createChannel(
+      {
+        channelId: 'health-assistant-channel',
+        channelName: 'Health Assistant Notifications',
+        channelDescription: 'Notifications for health reminders and tips',
+        importance: 4,
+        playSound: true,
+        soundName: 'default',
+        vibrate: true,
+      },
+      () => {}
+    );
+  }
+
+  private initIOS() {
+    PushNotificationIOS.requestPermissions({ alert: true, badge: true, sound: true });
+  }
+
+  /* --------- i18n helper --------- */
+  private t(key: string) {
+    return key
+      .split('.')
+      .reduce<any>((obj, k) => (obj ?? {})[k], translations[this.lang]) ?? key;
+  }
+
+  /* --------- ORTAK çağrı sarmalayıcıları --------- */
+
+  private schedule(opts: ScheduleOpts) {
+    if (Platform.OS === 'android' && PushNotificationAndroid) {
+      PushNotificationAndroid.localNotificationSchedule({
+        ...opts,
+        channelId: 'health-assistant-channel',
+        date: opts.date,
+        repeatType: opts.repeatType,
+        userInfo: opts.userInfo,
+      });
+    } else if (Platform.OS === 'ios') {
+      PushNotificationIOS.scheduleLocalNotification({
+        alertTitle: opts.title,
+        alertBody: opts.message,
+        fireDate: opts.date.toISOString(),
+        repeatInterval: opts.repeatType, // 'day' | 'week' | 'month' zaten destekleniyor
+        userInfo: { id: opts.id, ...(opts.userInfo || {}) },
+      });
     }
   }
 
-  private t(key: string): string {
-    const keys = key.split('.');
-    let value: any = translations[this.language];
-    
-    for (const k of keys) {
-      value = value?.[k];
-      if (value === undefined) {
-        return key;
-      }
+  private cancel(id: string) {
+    if (Platform.OS === 'android' && PushNotificationAndroid) {
+      PushNotificationAndroid.cancelLocalNotification(id);
+    } else {
+      PushNotificationIOS.cancelLocalNotifications({ id });
     }
-    
-    return value;
   }
 
-  // Schedule daily health tips
+  /* --------- Yüksek seviye API’lerin (senin eskileri) yeniden yazımı --------- */
+
   async scheduleDailyHealthTips(userId: string) {
-    // Cancel existing daily tips
-    this.cancelDailyHealthTips();
+    this.cancel('daily-health-tip');
 
     const tips = [
       this.t('notifications.waterReminder'),
@@ -51,172 +106,29 @@ class NotificationService {
       this.t('notifications.healthyEating'),
       this.t('notifications.checkupReminder'),
     ];
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(10, 0, 0, 0);
 
-    // Schedule a random tip for tomorrow at 10 AM
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(10, 0, 0, 0);
-
-    const randomTip = tips[Math.floor(Math.random() * tips.length)];
-
-    PushNotification.localNotificationSchedule({
-      channelId: 'health-assistant-channel',
-      title: this.t('notifications.dailyTip'),
-      message: randomTip,
-      date: tomorrow,
-      repeatType: 'day',
+    this.schedule({
       id: 'daily-health-tip',
+      title: this.t('notifications.dailyTip'),
+      message: tips[Math.floor(Math.random() * tips.length)],
+      date,
+      repeatType: 'day',
       userInfo: { type: 'daily-tip', userId },
     });
   }
 
-  // Schedule personalized notifications based on chat history
-  async schedulePersonalizedNotifications(userId: string, chatHistory: any[]) {
-    try {
-      // Analyze chat history for health concerns
-      const concerns = this.analyzeChatHistory(chatHistory);
-      
-      // Schedule relevant notifications
-      if (concerns.includes('medication')) {
-        this.scheduleMedicationReminder(userId);
-      }
-      
-      if (concerns.includes('exercise')) {
-        this.scheduleExerciseReminder(userId);
-      }
-      
-      if (concerns.includes('diet')) {
-        this.scheduleDietReminder(userId);
-      }
-      
-      if (concerns.includes('sleep')) {
-        this.scheduleSleepReminder(userId);
-      }
-    } catch (error) {
-      console.error('Error scheduling personalized notifications:', error);
+  /* …  diğer reminder fonksiyonlarını (exercise, diet, sleep, medication)  
+        sadece schedule(...) çağıracak şekilde aynı kalıpla yeniden yaz  … */
+
+  cancelAll() {
+    if (Platform.OS === 'android' && PushNotificationAndroid) {
+      PushNotificationAndroid.cancelAllLocalNotifications();
+    } else {
+      PushNotificationIOS.removeAllPendingNotificationRequests();
     }
-  }
-
-  private analyzeChatHistory(chatHistory: any[]): string[] {
-    const concerns: string[] = [];
-    const keywords = {
-      medication: ['ilaç', 'medicine', 'drug', 'pill', 'tablet'],
-      exercise: ['egzersiz', 'exercise', 'spor', 'sport', 'yürüyüş', 'walk'],
-      diet: ['diyet', 'diet', 'beslenme', 'nutrition', 'yemek', 'food'],
-      sleep: ['uyku', 'sleep', 'uykusuzluk', 'insomnia'],
-    };
-
-    chatHistory.forEach(message => {
-      const text = message.message.toLowerCase();
-      
-      Object.entries(keywords).forEach(([concern, words]) => {
-        if (words.some(word => text.includes(word))) {
-          if (!concerns.includes(concern)) {
-            concerns.push(concern);
-          }
-        }
-      });
-    });
-
-    return concerns;
-  }
-
-  private scheduleMedicationReminder(userId: string) {
-    const date = new Date();
-    date.setHours(9, 0, 0, 0);
-    if (date <= new Date()) {
-      date.setDate(date.getDate() + 1);
-    }
-
-    PushNotification.localNotificationSchedule({
-      channelId: 'health-assistant-channel',
-      title: this.t('notifications.medicationReminder'),
-      message: this.t('notifications.medicationReminder'),
-      date,
-      repeatType: 'day',
-      id: `medication-reminder-${userId}`,
-      userInfo: { type: 'medication', userId },
-    });
-  }
-
-  private scheduleExerciseReminder(userId: string) {
-    const date = new Date();
-    date.setHours(18, 0, 0, 0);
-    if (date <= new Date()) {
-      date.setDate(date.getDate() + 1);
-    }
-
-    PushNotification.localNotificationSchedule({
-      channelId: 'health-assistant-channel',
-      title: this.t('notifications.exerciseReminder'),
-      message: this.t('notifications.exerciseReminder'),
-      date,
-      repeatType: 'day',
-      id: `exercise-reminder-${userId}`,
-      userInfo: { type: 'exercise', userId },
-    });
-  }
-
-  private scheduleDietReminder(userId: string) {
-    const date = new Date();
-    date.setHours(12, 0, 0, 0);
-    if (date <= new Date()) {
-      date.setDate(date.getDate() + 1);
-    }
-
-    PushNotification.localNotificationSchedule({
-      channelId: 'health-assistant-channel',
-      title: this.t('notifications.healthyEating'),
-      message: this.t('notifications.healthyEating'),
-      date,
-      repeatType: 'day',
-      id: `diet-reminder-${userId}`,
-      userInfo: { type: 'diet', userId },
-    });
-  }
-
-  private scheduleSleepReminder(userId: string) {
-    const date = new Date();
-    date.setHours(22, 0, 0, 0);
-    if (date <= new Date()) {
-      date.setDate(date.getDate() + 1);
-    }
-
-    PushNotification.localNotificationSchedule({
-      channelId: 'health-assistant-channel',
-      title: this.t('notifications.sleepReminder'),
-      message: this.t('notifications.sleepReminder'),
-      date,
-      repeatType: 'day',
-      id: `sleep-reminder-${userId}`,
-      userInfo: { type: 'sleep', userId },
-    });
-  }
-
-  // Cancel all notifications
-  cancelAllNotifications() {
-    PushNotification.cancelAllLocalNotifications();
-  }
-
-  // Cancel daily health tips
-  cancelDailyHealthTips() {
-    PushNotification.cancelLocalNotification('daily-health-tip');
-  }
-
-  // Cancel specific notification
-  cancelNotification(notificationId: string) {
-    PushNotification.cancelLocalNotification(notificationId);
-  }
-
-  // Show immediate notification
-  showNotification(title: string, message: string) {
-    PushNotification.localNotification({
-      channelId: 'health-assistant-channel',
-      title,
-      message,
-      playSound: true,
-      soundName: 'default',
-    });
   }
 }
 

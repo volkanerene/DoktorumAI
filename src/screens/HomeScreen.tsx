@@ -201,17 +201,21 @@ export default function HomeScreen({ route, navigation }: HomeScreenProps) {
     return raw.length > 50 ? raw.substring(0, 50) + '...' : raw;
   };
 
-  const getAssistantInfo = (specialty: string) => {
-    const doc = assistantS.find(
-      (d) => d.name.toLowerCase() === specialty.toLowerCase()
-    );
-    if (doc) return doc;
-    return {
-      icon: 'help-outline',
-      color: '#666',
-      library: 'MaterialIcons' as const,
-    };
+const getAssistantInfo = (rawSpecialty: string | undefined) => {
+  const specialty = (rawSpecialty ?? '').toLowerCase();   // ① boşsa '' yap
+  const doc = assistantS.find(
+    (d) => (d.name ?? '').toLowerCase() === specialty      // ② d.name yoksa ''
+  );
+
+  if (doc) return doc;
+
+  // ③ fallback
+  return {
+    icon: 'help-outline',
+    color: '#666',
+    library: 'MaterialIcons' as const,
   };
+};
 
   const renderIcon = (
     library: 'MaterialIcons' | 'MaterialCommunityIcons',

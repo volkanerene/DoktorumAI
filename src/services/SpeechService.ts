@@ -1,19 +1,30 @@
-import Voice, {
-  SpeechRecognizedEvent,
-  SpeechResultsEvent,
-  SpeechErrorEvent,
-} from '@react-native-community/voice';
+import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import Voice from '@react-native-voice/voice';
 
 class SpeechService {
   private isListening: boolean = false;
   private language: string = 'tr-TR';
-  
+
+  private onResultCallback?: (text: string) => void;
+  private onErrorCallback?: (error: string) => void;
+  private onPartialResultCallback?: (text: string) => void;
+
   constructor() {
-    Voice.onSpeechStart = this.onSpeechStart;
-    Voice.onSpeechEnd = this.onSpeechEnd;
-    Voice.onSpeechError = this.onSpeechError;
-    Voice.onSpeechResults = this.onSpeechResults;
-    Voice.onSpeechPartialResults = this.onSpeechPartialResults;
+    try {
+      // Sadece Android'de NativeEventEmitter gerekiyorsa ekle
+      if (Platform.OS === 'android' && NativeModules.Voice) {
+        const voiceEmitter = new NativeEventEmitter(NativeModules.Voice);
+      }
+
+      // Voice event listener'ları
+      Voice.onSpeechStart = this.onSpeechStart;
+      Voice.onSpeechEnd = this.onSpeechEnd;
+      Voice.onSpeechError = this.onSpeechError;
+      Voice.onSpeechResults = this.onSpeechResults;
+      Voice.onSpeechPartialResults = this.onSpeechPartialResults;
+    } catch (error) {
+      console.warn('Voice module initialization failed:', error);
+    }
   }
 
   setLanguage(lang: 'tr' | 'en') {
@@ -30,10 +41,10 @@ class SpeechService {
       this.onResultCallback = onResult;
       this.onErrorCallback = onError;
       this.onPartialResultCallback = onPartialResult;
-      
+
       await Voice.start(this.language);
     } catch (e) {
-      console.error(e);
+      console.error('[Voice] Failed to start:', e);
       this.isListening = false;
       onError?.('Failed to start voice recognition');
     }
@@ -44,7 +55,7 @@ class SpeechService {
       await Voice.stop();
       this.isListening = false;
     } catch (e) {
-      console.error(e);
+      console.error('[Voice] Failed to stop:', e);
     }
   }
 
@@ -53,7 +64,7 @@ class SpeechService {
       await Voice.cancel();
       this.isListening = false;
     } catch (e) {
-      console.error(e);
+      console.error('[Voice] Failed to cancel:', e);
     }
   }
 
@@ -61,7 +72,7 @@ class SpeechService {
     try {
       await Voice.destroy();
     } catch (e) {
-      console.error(e);
+      console.error('[Voice] Failed to destroy:', e);
     }
   }
 
@@ -73,35 +84,31 @@ class SpeechService {
     return this.isListening;
   }
 
-  // Callbacks
-  private onResultCallback?: (text: string) => void;
-  private onErrorCallback?: (error: string) => void;
-  private onPartialResultCallback?: (text: string) => void;
-
-  private onSpeechStart = (e: any) => {
-    console.log('Speech started');
+  // Event handlers
+  private onSpeechStart = () => {
+    console.log('[Voice] Speech started');
   };
 
-  private onSpeechEnd = (e: any) => {
-    console.log('Speech ended');
+  private onSpeechEnd = () => {
+    console.log('[Voice] Speech ended');
     this.isListening = false;
   };
 
-  private onSpeechError = (e: SpeechErrorEvent) => {
-    console.log('Speech error:', e.error);
+  private onSpeechError = (e: any) => {
+    console.error('[Voice] Speech error:', e.error);
     this.isListening = false;
     this.onErrorCallback?.(e.error?.message || 'Speech recognition error');
   };
 
-  private onSpeechResults = (e: SpeechResultsEvent) => {
-    console.log('Speech results:', e.value);
+  private onSpeechResults = (e: any) => {
+    console.log('[Voice] Speech results:', e.value);
     if (e.value && e.value.length > 0) {
       this.onResultCallback?.(e.value[0]);
     }
   };
 
-  private onSpeechPartialResults = (e: SpeechResultsEvent) => {
-    console.log('Speech partial results:', e.value);
+  private onSpeechPartialResults = (e: any) => {
+    console.log('[Voice] Partial results:', e.value);
     if (e.value && e.value.length > 0) {
       this.onPartialResultCallback?.(e.value[0]);
     }
