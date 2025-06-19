@@ -1,4 +1,4 @@
-package com.doktorumai
+package com.DoktorumAI
 
 import android.app.Application
 import com.facebook.react.PackageList

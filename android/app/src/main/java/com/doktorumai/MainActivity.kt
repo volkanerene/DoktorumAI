@@ -1,4 +1,4 @@
-package com.doktorumai
+package com.DoktorumAI
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
