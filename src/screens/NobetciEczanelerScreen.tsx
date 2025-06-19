@@ -143,7 +143,7 @@ export default function NobetciEczanelerScreen({ navigation }: NobetciProps) {
         const data: Eczane[] = response.data.data;
         
         // Geocoding ve mesafe hesaplama
-        Geocoder.init('AIzaSyD0uByEyQqliZsigyf2k8O95q_tpnP_SaM', { language: 'tr' });
+        Geocoder.init('', { language: 'tr' });
         const geocodedData: Eczane[] = [];
         
         for (const item of data) {
