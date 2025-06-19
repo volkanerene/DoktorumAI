@@ -9,6 +9,7 @@ import {
   Alert,
   StyleSheet,
   SafeAreaView,
+  Platform,
 } from 'react-native';
 import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -18,6 +19,7 @@ import { GoogleSignin, statusCodes, isSuccessResponse } from '@react-native-goog
 import { appleAuth } from '@invertase/react-native-apple-authentication';
 import SHA256 from 'crypto-js/sha256';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLanguage } from '../context/LanguageContext';
 
 type LoginScreenProps = StackScreenProps<RootStackParamList, 'Login'>;
 
@@ -36,6 +38,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const { t, language } = useLanguage();
 
   // ======== Configure Google Signin once ========
   useEffect(() => {

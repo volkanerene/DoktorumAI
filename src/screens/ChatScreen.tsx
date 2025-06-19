@@ -22,7 +22,11 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
-import { assistantS } from '../data/assistantData';
+import { assistantS, getAssistantName, getAssistantApiName } from '../data/assistantData';
+import { useLanguage } from '../context/LanguageContext';
+import { useSubscription } from '../context/SubscriptionContext';
+import SpeechService from '../services/SpeechService';
+import NotificationService from '../services/NotificationService';
 import ImageCropPicker from 'react-native-image-crop-picker';
 import {
   launchCamera,
@@ -44,8 +48,10 @@ interface ChatMessage {
   createdAt?: string;
   isLoading?: boolean;
   analysis?: MessageAnalysis;
-  type?: 'text' | 'image';
+  type?: 'text' | 'image' | 'voice';
   imageUrl?: string;
+  voiceUrl?: string;
+  specialistRecommendation?: string[];
 }
 
 interface MessageAnalysis {
@@ -55,6 +61,7 @@ interface MessageAnalysis {
   warnings?: string[];
   references?: Reference[];
   urgencyLevel?: 'low' | 'medium' | 'high';
+  suggestedSpecialists?: string[];
 }
 
 interface Reference {
@@ -65,38 +72,81 @@ interface Reference {
 
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { userId, assistantName } = route.params;
+  const { t, language } = useLanguage();
+  const { 
+    isPremium, 
+    canSendMessage, 
+    canSendImage, 
+    incrementMessageCount,
+    dailyMessageCount,
+    dailyMessageLimit 
+  } = useSubscription();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [userMessage, setUserMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<Asset | null>(null);
-  const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(true);
   const [showReferences, setShowReferences] = useState(false);
   const [selectedReferences, setSelectedReferences] = useState<Reference[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
+  const isHealthAssistant = assistantName === 'Family Assistant' || 
+                           assistantName === 'Aile Asistanı' ||
+                           !assistantName;
+
   const getAssistantInfo = (name: string) => {
-    const doc = assistantS.find(
-      (d) => d.name.toLowerCase() === name.toLowerCase(),
+    const assistant = assistantS.find(a => 
+      getAssistantApiName(a.nameKey) === name
     );
-    if (doc) return doc;
+    if (assistant) {
+      return {
+        icon: assistant.icon,
+        color: assistant.color,
+        library: assistant.library,
+        nameKey: assistant.nameKey,
+      };
+    }
     return {
       icon: 'account-question',
       color: '#FF6F61',
       library: 'MaterialCommunityIcons' as const,
+      nameKey: 'assistants.family',
     };
   };
   
-  const { icon, color, library } = getAssistantInfo(assistantName || 'Asistan');
+  const { icon, color, library, nameKey } = getAssistantInfo(assistantName || 'Family Assistant');
+  const displayName = getAssistantName(nameKey, t);
 
   useEffect(() => {
     fetchMessages();
     animateIn();
+    
+    // Set language for speech service
+    SpeechService.setLanguage(language);
+    
+    // Show welcome message if it's health assistant and no messages
+    if (isHealthAssistant && messages.length === 0) {
+      showWelcomeMessage();
+    }
+    
+    return () => {
+      SpeechService.destroy();
+    };
   }, []);
+
+  useEffect(() => {
+    // Schedule notifications based on chat history
+    if (messages.length > 0) {
+      NotificationService.schedulePersonalizedNotifications(userId, messages);
+    }
+  }, [messages]);
 
   const animateIn = () => {
     Animated.parallel([
@@ -112,6 +162,16 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         useNativeDriver: true,
       }),
     ]).start();
+  };
+
+  const showWelcomeMessage = () => {
+    const welcomeMsg: ChatMessage = {
+      id: 'welcome',
+      sender: 'assistant',
+      text: t('chat.welcomeMessage'),
+      createdAt: formatTime(new Date().toISOString()),
+    };
+    setMessages([welcomeMsg]);
   };
 
   const fetchMessages = async () => {
@@ -135,9 +195,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               msg.type = 'image';
               msg.imageUrl = parsed.url;
               msg.text = parsed.caption;
+            } else if (parsed.type === 'voice') {
+              msg.type = 'voice';
+              msg.voiceUrl = parsed.url;
+              msg.text = parsed.transcript;
             } else if (parsed.analysis) {
               msg.analysis = parsed.analysis;
               msg.text = parsed.text || it.message;
+              msg.specialistRecommendation = parsed.specialistRecommendation;
             }
           } catch (e) {}
 
@@ -147,7 +212,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
       }
     } catch (e) {
-      console.log('Mesaj geçmişi alınamadı:', e);
+      console.log('Error fetching messages:', e);
     }
   };
 
@@ -158,12 +223,23 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   };
 
   const handleSend = async () => {
+    // Check subscription limits
+    if (!canSendMessage) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
     if (!userId) {
-      Alert.alert('Hata', 'Kullanıcı ID bulunamadı.');
+      Alert.alert(t('common.error'), 'User ID not found.');
       return;
     }
     
     if (selectedImage) {
+      if (!canSendImage) {
+        Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
+        setShowUpgradeModal(true);
+        return;
+      }
       await sendImageMessage();
       return;
     }
@@ -192,26 +268,36 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     setMessages((prev) => [...prev, userMsgObj, loadingBubble]);
     setUserMessage('');
     setLoading(true);
+    setShowQuickActions(false);
+    
+    // Increment message count for free users
+    if (!isPremium) {
+      await incrementMessageCount();
+    }
     
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
 
     try {
       const { data } = await axios.post(`${SERVER_URL}?action=sendMessage`, {
         user_id: userId,
-        specialty: assistantName || 'Genel',
+        specialty: assistantName || 'Family Assistant',
         user_message: userMessage,
+        language,
+        is_health_assistant: isHealthAssistant,
       });
 
       if (data.success) {
         // Parse the response for structured data
         let analysis: MessageAnalysis | undefined;
         let responseText = data.assistant_reply;
+        let specialistRecommendation: string[] | undefined;
         
         try {
           const parsed = JSON.parse(data.assistant_reply);
           if (parsed.analysis) {
             analysis = parsed.analysis;
             responseText = parsed.text || data.assistant_reply;
+            specialistRecommendation = parsed.specialistRecommendation;
           }
         } catch (e) {
           // Response is plain text, extract references if any
@@ -230,16 +316,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                   isLoading: false,
                   createdAt: formatTime(now.toISOString()),
                   analysis,
+                  specialistRecommendation,
                 }
               : m,
           ),
         );
       } else {
-        throw new Error(data.error || 'Sunucu hatası');
+        throw new Error(data.error || 'Server error');
       }
     } catch (e: any) {
       setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
-      Alert.alert('Hata', e.message || 'Mesaj gönderilemedi.');
+      Alert.alert(t('common.error'), e.message || 'Failed to send message.');
     } finally {
       setLoading(false);
     }
@@ -260,11 +347,46 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     return references;
   };
 
+  const handleVoiceMessage = async () => {
+    if (!canSendMessage) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
+    const available = await SpeechService.isAvailable();
+    if (!available) {
+      Alert.alert(t('common.error'), 'Voice recognition not available');
+      return;
+    }
+
+    if (isListening) {
+      await SpeechService.stopListening();
+      setIsListening(false);
+    } else {
+      setIsListening(true);
+      await SpeechService.startListening(
+        (text) => {
+          setUserMessage(text);
+          setIsListening(false);
+          // Auto send after voice input
+          setTimeout(() => handleSend(), 500);
+        },
+        (error) => {
+          Alert.alert(t('common.error'), error);
+          setIsListening(false);
+        },
+        (partialText) => {
+          setUserMessage(partialText);
+        }
+      );
+    }
+  };
+
   const sendImageMessage = async () => {
     if (!selectedImage) return;
 
     const now = new Date();
-    const caption = userMessage.trim() || '[Görsel Gönderildi]';
+    const caption = userMessage.trim() || '[Image]';
 
     const userImgMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -288,25 +410,33 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     setUserMessage('');
     setLoading(true);
 
+    // Increment message count
+    if (!isPremium) {
+      await incrementMessageCount();
+    }
+
     try {
       const data = {
         user_id: userId,
-        specialty: assistantName || 'Genel',
+        specialty: assistantName || 'Family Assistant',
         user_image: selectedImage.base64,
         fileName: selectedImage.fileName || 'image.jpg',
         caption,
+        language,
       };
       const { data: res } = await axios.post(`${SERVER_URL}?action=sendImage`, data);
 
       if (res.success) {
         let analysis: MessageAnalysis | undefined;
         let responseText = res.assistant_reply;
+        let specialistRecommendation: string[] | undefined;
         
         try {
           const parsed = JSON.parse(res.assistant_reply);
           if (parsed.analysis) {
             analysis = parsed.analysis;
             responseText = parsed.text || res.assistant_reply;
+            specialistRecommendation = parsed.specialistRecommendation;
           }
         } catch (e) {}
 
@@ -319,22 +449,29 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                   isLoading: false,
                   createdAt: formatTime(now.toISOString()),
                   analysis,
+                  specialistRecommendation,
                 }
               : m,
           ),
         );
       } else {
-        throw new Error(res.error || 'Sunucu hatası');
+        throw new Error(res.error || 'Server error');
       }
     } catch (e: any) {
       setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
-      Alert.alert('Hata', e.message || 'Görsel gönderilemedi.');
+      Alert.alert(t('common.error'), e.message || 'Failed to send image.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleImagePickFromGallery = () => {
+    if (!canSendImage) {
+      Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
+      setShowUpgradeModal(true);
+      return;
+    }
+
     const options: ImageLibraryOptions = {
       mediaType: 'photo' as MediaType,
       quality: 0.8,
@@ -348,6 +485,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   };
 
   const handleCameraCapture = async () => {
+    if (!canSendImage) {
+      Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
+      setShowUpgradeModal(true);
+      return;
+    }
+
     try {
       const image = await ImageCropPicker.openCamera({
         width: 800,
@@ -365,9 +508,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       } as any);
     } catch (e: any) {
       if (e.code !== 'E_PICKER_CANCELLED') {
-        Alert.alert('Kamera Hatası', 'Fotoğraf çekilemedi.');
+        Alert.alert(t('common.error'), 'Failed to capture photo');
       }
     }
+  };
+
+  const handleSpecialistRecommendation = (specialistNameKey: string) => {
+    const apiName = getAssistantApiName(specialistNameKey);
+    navigation.replace('Chat', { userId, assistantName: apiName });
   };
 
   const showReferenceModal = (references: Reference[]) => {
@@ -408,7 +556,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           {item.isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator color={isUser ? '#fff' : color} size="small" />
-              <Text style={styles.loadingText}>Analiz ediliyor...</Text>
+              <Text style={styles.loadingText}>{t('chat.analyzing')}</Text>
             </View>
           ) : (
             <>
@@ -420,6 +568,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                     resizeMode="cover"
                   />
                 </TouchableOpacity>
+              )}
+              
+              {item.type === 'voice' && (
+                <View style={styles.voiceIndicator}>
+                  <MaterialIcons name="mic" size={16} color={isUser ? '#fff' : color} />
+                  <Text style={[styles.voiceText, { color: isUser ? '#fff' : '#666' }]}>
+                    {t('chat.voiceMessage')}
+                  </Text>
+                </View>
               )}
               
               <Text style={[
@@ -439,8 +596,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                       item.analysis.urgencyLevel === 'low' && styles.urgencyLow,
                     ]}>
                       <Text style={styles.urgencyText}>
-                        {item.analysis.urgencyLevel === 'high' ? '⚠️ Acil' :
-                         item.analysis.urgencyLevel === 'medium' ? '⚡ Orta' : '✓ Düşük'}
+                        {item.analysis.urgencyLevel === 'high' ? '⚠️ ' + t('image.urgency.critical') :
+                         item.analysis.urgencyLevel === 'medium' ? '⚡ ' + t('image.urgency.urgent') : 
+                         '✓ ' + t('image.urgency.routine')}
                       </Text>
                     </View>
                   )}
@@ -461,10 +619,39 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                     >
                       <MaterialIcons name="library-books" size={16} color="#666" />
                       <Text style={styles.referencesButtonText}>
-                        Kaynakları Göster ({item.analysis.references.length})
+                        {t('lab.references')} ({item.analysis.references.length})
                       </Text>
                     </TouchableOpacity>
                   )}
+                </View>
+              )}
+
+              {item.specialistRecommendation && item.specialistRecommendation.length > 0 && (
+                <View style={styles.specialistContainer}>
+                  <Text style={styles.specialistTitle}>{t('chat.goToSpecialist')}</Text>
+                  <View style={styles.specialistButtons}>
+                    {item.specialistRecommendation.map((specialistKey, idx) => {
+                      const specialist = assistantS.find(a => a.nameKey === specialistKey);
+                      if (!specialist) return null;
+                      
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={[styles.specialistButton, { backgroundColor: specialist.color }]}
+                          onPress={() => handleSpecialistRecommendation(specialistKey)}
+                        >
+                          {specialist.library === 'MaterialIcons' ? (
+                            <MaterialIcons name={specialist.icon} size={20} color="#fff" />
+                          ) : (
+                            <MaterialCommunityIcons name={specialist.icon} size={20} color="#fff" />
+                          )}
+                          <Text style={styles.specialistButtonText}>
+                            {getAssistantName(specialist.nameKey, t)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
               )}
               
@@ -498,8 +685,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             <MaterialIcons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerText}>{assistantName || 'Asistan'}</Text>
-            <Text style={styles.headerSubtext}>Çevrimiçi • Yanıtlıyor</Text>
+            <Text style={styles.headerText}>{displayName}</Text>
+            <Text style={styles.headerSubtext}>{t('chat.online')} • {t('chat.responding')}</Text>
           </View>
           <TouchableOpacity style={styles.headerButton}>
             <MaterialIcons name="more-vert" size={24} color="#fff" />
@@ -525,32 +712,32 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 )}
               </View>
               <Text style={styles.emptyTitle}>
-                {assistantName} ile Sohbete Başlayın
+                {displayName} {t('chat.startChat')}
               </Text>
               <Text style={styles.emptySubtitle}>
-                Sağlık sorularınızı sorun, tahlil sonuçlarınızı paylaşın
+                {t('chat.askQuestions')}
               </Text>
             </View>
           }
         />
 
         {/* Quick Actions */}
-        {showQuickActions && (
+        {showQuickActions && isHealthAssistant && messages.length <= 1 && (
           <Animated.View style={[styles.quickActions, { opacity: fadeAnim }]}>
             <QuickActionButton
               icon="lightbulb-outline"
-              text="Semptomlarım var"
-              onPress={() => setUserMessage('Şu semptomlarım var: ')}
+              text={t('chat.symptoms')}
+              onPress={() => setUserMessage(t('chat.symptoms') + ' ')}
             />
             <QuickActionButton
               icon="history"
-              text="Tahlil sonucu"
-              onPress={() => setUserMessage('Tahlil sonucumu yorumlayabilir misin?')}
+              text={t('chat.labResult')}
+              onPress={() => setUserMessage(t('chat.labResult'))}
             />
             <QuickActionButton
               icon="help-outline"
-              text="Genel soru"
-              onPress={() => setUserMessage('Merak ettiğim konu: ')}
+              text={t('chat.generalQuestion')}
+              onPress={() => setUserMessage(t('chat.generalQuestion') + ' ')}
             />
           </Animated.View>
         )}
@@ -565,6 +752,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             >
               <MaterialIcons name="close" size={20} color="#fff" />
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Message limit warning */}
+        {!isPremium && dailyMessageCount >= dailyMessageLimit - 1 && (
+          <View style={styles.limitWarning}>
+            <Text style={styles.limitWarningText}>
+              {t('chat.messageLimitReached').replace('{count}', `${dailyMessageLimit - dailyMessageCount}`)}
+            </Text>
           </View>
         )}
 
@@ -587,14 +783,26 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <MaterialIcons name="photo" size={24} color="#666" />
             </TouchableOpacity>
             
+            <TouchableOpacity 
+              onPress={handleVoiceMessage} 
+              disabled={loading} 
+              style={styles.inputButton}
+            >
+              <MaterialIcons 
+                name={isListening ? "mic" : "mic-none"} 
+                size={24} 
+                color={isListening ? "#FF0000" : "#666"} 
+              />
+            </TouchableOpacity>
+            
             <TextInput
               ref={inputRef}
               style={styles.input}
-              placeholder="Mesajınızı yazın..."
+              placeholder={t('chat.placeholder')}
               placeholderTextColor="#999"
               value={userMessage}
               onChangeText={setUserMessage}
-              editable={!loading}
+              editable={!loading && !isListening}
               multiline
               maxLength={1000}
               onFocus={() => setShowQuickActions(false)}
@@ -618,7 +826,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           </View>
           
           <Text style={styles.disclaimer}>
-            Bu bilgiler sadece eğitim amaçlıdır. Kesin tanı için doktora başvurun.
+            {t('chat.disclaimer')}
           </Text>
         </View>
       </KeyboardAvoidingView>
@@ -633,7 +841,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Kaynaklar</Text>
+              <Text style={styles.modalTitle}>{t('lab.references')}</Text>
               <TouchableOpacity onPress={() => setShowReferences(false)}>
                 <MaterialIcons name="close" size={24} color="#000" />
               </TouchableOpacity>
@@ -655,6 +863,43 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 </TouchableOpacity>
               )}
             />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Upgrade Modal */}
+      <Modal
+        visible={showUpgradeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUpgradeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.upgradeModalContent}>
+            <MaterialIcons name="workspace-premium" size={64} color="#FFD700" />
+            <Text style={styles.upgradeTitle}>
+              {!canSendMessage ? t('chat.messageLimitReached') : t('chat.imageNotAllowed')}
+            </Text>
+            <Text style={styles.upgradeSubtitle}>
+              {t('subscription.subtitle')}
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.upgradeButton}
+              onPress={() => {
+                setShowUpgradeModal(false);
+                navigation.navigate('Subscription', { userId, userName: '' });
+              }}
+            >
+              <Text style={styles.upgradeButtonText}>{t('chat.upgradeNow')}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.laterButton}
+              onPress={() => setShowUpgradeModal(false)}
+            >
+              <Text style={styles.laterButtonText}>{t('subscription.notNow')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -777,6 +1022,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
+  voiceIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  voiceText: {
+    marginLeft: 4,
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
   messageTime: {
     fontSize: 11,
     marginTop: 4,
@@ -842,6 +1097,36 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 4,
     textDecorationLine: 'underline',
+  },
+  specialistContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  specialistTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  specialistButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  specialistButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  specialistButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
   quickActions: {
     flexDirection: 'row',
@@ -930,6 +1215,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 4,
   },
+  limitWarning: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  limitWarningText: {
+    color: '#E65100',
+    fontSize: 12,
+    textAlign: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -972,5 +1267,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     flex: 1,
+  },
+  upgradeModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+  },
+  upgradeTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  upgradeSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  upgradeButton: {
+    backgroundColor: '#007BFF',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 25,
+    marginBottom: 12,
+  },
+  upgradeButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  laterButton: {
+    paddingVertical: 12,
+  },
+  laterButtonText: {
+    color: '#666',
+    fontSize: 14,
   },
 });

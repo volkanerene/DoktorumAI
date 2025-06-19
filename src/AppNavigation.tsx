@@ -18,6 +18,8 @@ import CekimSonucuScreen from './screens/CekimSonucuScreen';
 import TahlilScreen from './screens/TahlilScreen';
 import PasswordResetScreen from './screens/PasswordResetScreen';
 import EmergencySOSScreen from './screens/EmergencySOSScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
+import SubscriptionScreen from './screens/SubscriptionScreen';
 
 export type RootStackParamList = {
   AuthLoading: undefined;
@@ -34,6 +36,8 @@ export type RootStackParamList = {
   History: { userId: string };
   NobetciEczaneler: undefined;
   Profile: { userId: string };
+  Onboarding: { userId: string; userName: string };
+  Subscription: { userId: string; userName: string };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();

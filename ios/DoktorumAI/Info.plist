@@ -57,6 +57,10 @@
 	<string>Bu uygulama, kullanıcıya en yakın sağlık hizmetlerini göstermek için konum bilgisine erişir.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Bu uygulama, kullanıcıların sağlık verilerini fotoğraf olarak yükleyebilmeleri için fotoğraf galerisini kullanır.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Bu uygulama, sesli mesajlar gönderebilmeniz için konuşma tanıma özelliğini kullanır.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Bu uygulama, sesli mesajlar gönderebilmeniz için mikrofona erişim gerektirir.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>AntDesign.ttf</string>

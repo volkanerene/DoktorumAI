@@ -14,15 +14,18 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Import the shared assistantS data
-import { assistantS } from '../data/assistantData';
+import { assistantS, getAssistantName, getAssistantApiName } from '../data/assistantData';
+import { useLanguage } from '../context/LanguageContext';
 
 type assistantSelectionProps = StackScreenProps<RootStackParamList, 'assistantSelection'>;
 
 export default function assistantSelectionScreen({ route, navigation }: assistantSelectionProps) {
   const { userId } = route.params;
-
-  const handleassistantSelect = (assistantName: string) => {
-    navigation.navigate('Chat', { userId, assistantName });
+  const { t } = useLanguage();
+  const handleassistantSelect = (nameKey: string) => {
+    // Use API name for backend communication
+    const apiName = getAssistantApiName(nameKey);
+    navigation.navigate('Chat', { userId, assistantName: apiName });
   };
 
   return (

@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Modal,
   ScrollView,
+  Platform,
 } from 'react-native';
 import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -17,6 +18,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { GoogleSignin, statusCodes, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import { appleAuth, AppleButton } from '@invertase/react-native-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLanguage } from '../context/LanguageContext';
 
 type SignupScreenProps = StackScreenProps<RootStackParamList, 'Signup'>;
 
@@ -38,6 +40,7 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
   const [showPass, setShowPass] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     GoogleSignin.configure({

@@ -8,10 +8,12 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import { useLanguage } from '../context/LanguageContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function FirstScreen({ navigation }: any) {
+  const { t } = useLanguage();
   const isTablet = W >= 600;
   // Telefon için %35, tablet için %50 genişlikte doktor resmi
   const imageSize = isTablet ? W * 0.5 : W * 0.35;
