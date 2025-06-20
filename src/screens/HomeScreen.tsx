@@ -13,6 +13,7 @@ import {
   StatusBar,
   Modal,
   FlatList,
+  Platform,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
@@ -21,6 +22,8 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import LinearGradient from 'react-native-linear-gradient';
 import { assistantS } from '../data/assistantData';
 import axios from 'axios';
+import { useLanguage } from '../context/LanguageContext';
+
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width, height } = Dimensions.get('window');
@@ -75,7 +78,7 @@ export default function HomeScreen({ route, navigation }: HomeScreenProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentTip, setCurrentTip] = useState(0);
-  
+  const { t, language } = useLanguage();
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -359,6 +362,15 @@ const getAssistantInfo = (rawSpecialty: string | undefined) => {
                 </Text>
               </TouchableOpacity>
             </View>
+            {!isPremium && (
+              <TouchableOpacity 
+                style={styles.upgradeBadge}
+                onPress={() => navigation.navigate('Subscription', { userId, userName })}
+              >
+                <MaterialIcons name="workspace-premium" size={16} color="#FFD700" />
+                <Text style={styles.upgradeBadgeText}>Ücretsiz Plan</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId })}>
               <Image
                 style={styles.profileImage}
@@ -432,59 +444,61 @@ const getAssistantInfo = (rawSpecialty: string | undefined) => {
           >
             Hızlı İşlemler
           </Animated.Text>
-
-          {/* Quick Actions Grid */}
-          <View style={styles.quickActionsGrid}>
-            <QuickActionCard
-              title="AI Asistan"
-              subtitle="Sağlık soruları sorun"
-              icon="psychology"
-              color="#6366F1"
-              onPress={() => navigation.navigate('Chat', { userId, assistantName: 'Aile Asistanı' })}
-              delay={100}
-            />
-            <QuickActionCard
-              title="Uzman Seç"
-              subtitle="Branş bazlı danışma"
-              icon="medical-services"
-              color="#EC4899"
-              onPress={() => navigation.navigate('assistantSelection', { userId })}
-              delay={200}
-            />
-            <QuickActionCard
-              title="Tahlil Analizi"
-              subtitle="Sonuçları yükleyin"
-              icon="biotech"
-              color="#10B981"
-              onPress={() => navigation.navigate('Tahlil', { userId })}
-              delay={300}
-            />
-            <QuickActionCard
-              title="Görüntü Analizi"
-              subtitle="MR, Röntgen analizi"
-              icon="image-search"
-              color="#F59E0B"
-              onPress={() => navigation.navigate('CekimSonucu', { userId })}
-              delay={400}
-            />
-            <QuickActionCard
-              title="Nöbetçi Eczane"
-              subtitle="En yakın eczaneler"
-              icon="local-pharmacy"
-              color="#EF4444"
-              onPress={() => navigation.navigate('NobetciEczaneler')}
-              delay={500}
-            />
-            <QuickActionCard
-              title="Acil Durum"
-              subtitle="112'yi ara"
-              icon="emergency"
-              color="#DC2626"
-              onPress={() => {/* Handle emergency */}}
-              delay={600}
-            />
-          </View>
-
+          <View style={styles.quickActionsContainer}>
+  <TouchableOpacity
+    style={styles.healthAssistantCard}
+    onPress={() => navigation.navigate('Chat', { userId, assistantName: 'Aile Asistanı' })}
+    activeOpacity={0.9}
+  >
+    <LinearGradient
+      colors={['#6366F1', '#4F46E5']}
+      style={styles.healthAssistantGradient}
+    >
+      <MaterialIcons name="family-restroom" size={48} color="#fff" />
+      <Text style={styles.healthAssistantTitle}>
+        {language === 'tr' ? 'Sağlık Asistanım' : 'My Health Assistant'}
+      </Text>
+      <Text style={styles.healthAssistantSubtitle}>
+        {t('home.healthAssistantDesc')}
+      </Text>
+    </LinearGradient>
+  </TouchableOpacity>
+  {/* Diğer butonlar */}
+  <View style={styles.quickActionsGrid}>
+    <QuickActionCard
+      title={t('home.selectSpecialist')}
+      subtitle={t('home.selectSpecialistDesc')}
+      icon="medical-services"
+      color="#EC4899"
+      onPress={() => navigation.navigate('assistantSelection', { userId })}
+      delay={200}
+    />
+    <QuickActionCard
+      title={t('home.labAnalysis')}
+      subtitle={t('home.labAnalysisDesc')}
+      icon="biotech"
+      color="#10B981"
+      onPress={() => navigation.navigate('Tahlil', { userId })}
+      delay={300}
+    />
+    <QuickActionCard
+      title={t('home.imageAnalysis')}
+      subtitle={t('home.imageAnalysisDesc')}
+      icon="image-search"
+      color="#F59E0B"
+      onPress={() => navigation.navigate('CekimSonucu', { userId })}
+      delay={400}
+    />
+    <QuickActionCard
+      title={t('home.nearbyPharmacy')}
+      subtitle={t('home.nearbyPharmacyDesc')}
+      icon="local-pharmacy"
+      color="#EF4444"
+      onPress={() => navigation.navigate('NobetciEczaneler')}
+      delay={500}
+    />
+  </View>
+</View>
           {/* Recent Chats */}
           {lastUserMessages.length > 0 && (
             <>
@@ -769,4 +783,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  upgradeBadge: {
+  position: 'absolute',
+  top: 60,
+  left: 20,
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: 'rgba(255, 215, 0, 0.2)',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+  gap: 4,
+},
+upgradeBadgeText: {
+  color: '#FFD700',
+  fontSize: 12,
+  fontWeight: '600',
+},
+quickActionsContainer: {
+  paddingHorizontal: 16,
+  marginBottom: 8,
+},
+healthAssistantCard: {
+  marginBottom: 16,
+  borderRadius: 20,
+  overflow: 'hidden',
+  elevation: 4,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+},
+healthAssistantGradient: {
+  padding: 24,
+  alignItems: 'center',
+},
+healthAssistantTitle: {
+  fontSize: 24,
+  fontWeight: 'bold',
+  color: '#fff',
+  marginTop: 12,
+  marginBottom: 8,
+},
+healthAssistantSubtitle: {
+  fontSize: 16,
+  color: 'rgba(255,255,255,0.9)',
+  textAlign: 'center',
+},
 });

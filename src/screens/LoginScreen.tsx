@@ -61,13 +61,26 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         // Save login state to persist login across app restarts
         await AsyncStorage.setItem(
           'userData',
-          JSON.stringify({ userId: response.data.user_id, userName: response.data.name, userType: 'registered' })
+          JSON.stringify({ 
+            userId: response.data.user_id, 
+            userName: response.data.name, 
+            userType: 'registered' 
+          })
         );
         Alert.alert('Başarılı', 'Giriş yapıldı.');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Home', params: { userId: response.data.user_id, userName: response.data.name, userType: 'registered' } }],
-        });
+        const onboardingCompleted = await AsyncStorage.getItem(`onboarding_completed_${response.data.user_id}`);
+          if (!onboardingCompleted) {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Onboarding', params: { userId: response.data.user_id, userName: response.data.name } }],
+            });
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Home', params: { userId: response.data.user_id, userName: response.data.name } }],
+            });
+          }
+
       } else {
         Alert.alert('Hata', response.data.error || 'Giriş başarısız');
       }
@@ -78,22 +91,35 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 const handleForgotPassword = () => navigation.navigate('PasswordReset');
   // ----- GUEST LOGIN -----
   const handleGuestLogin = async () => {
+    
     try {
       const guestId = 'guest_' + Date.now();
       const guestName = 'Misafir Kullanıcı';
-      
-      // Save guest data to AsyncStorage
-      await AsyncStorage.setItem(
-        'userData',
-        JSON.stringify({ userId: guestId, userName: guestName, userType: 'guest' })
-      );
-      
-      Alert.alert('Başarılı', 'Misafir olarak giriş yapıldı.');
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Home', params: { userId: guestId, userName: guestName, userType: 'guest' } }],
-      });
-    } catch (error) {
+      const response = await guestId+guestName;
+      if (response.data.success) {
+        await AsyncStorage.setItem(
+          'userData',
+          JSON.stringify({ 
+            userId: response.data.user_id, 
+            userName: response.data.name, 
+            userType: 'registered' 
+          })
+        );
+        Alert.alert('Başarılı', 'Giriş yapıldı.');
+        const onboardingCompleted = await AsyncStorage.getItem(`onboarding_completed_${response.data.user_id}`);
+          if (!onboardingCompleted) {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Onboarding', params: { userId: response.data.user_id, userName: response.data.name } }],
+            });
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Home', params: { userId: response.data.user_id, userName: response.data.name } }],
+            });
+          }
+    }
+   } catch (error) {
       Alert.alert('Hata', 'Misafir girişi başarısız.');
     }
   };
@@ -302,15 +328,22 @@ const handleForgotPassword = () => navigation.navigate('PasswordReset');
         {/* Social Buttons */}
         <View style={styles.socialButtons}>
           {/* Google */}
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin}>
+          <TouchableOpacity 
+            style={[
+              styles.googleButton,
+              Platform.OS === 'ios' ? {} : { flex: 1 } // Android'de tam genişlik
+            ]} 
+            onPress={handleGoogleLogin}
+          >
             <Text style={styles.socialButtonText}>GOOGLE</Text>
           </TouchableOpacity>
           
-          {/* Apple Sign In */}
-          <TouchableOpacity style={styles.appleButton} onPress={handleAppleLogin}>
-            <MaterialIcons name="apple" size={16} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={styles.socialButtonText}>APPLE</Text>
-          </TouchableOpacity>
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity style={styles.appleButton} onPress={handleAppleLogin}>
+              <MaterialIcons name="apple" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.socialButtonText}>APPLE</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </SafeAreaView>

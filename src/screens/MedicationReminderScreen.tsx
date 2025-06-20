@@ -19,7 +19,6 @@ import { RootStackParamList } from '../AppNavigation';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import PushNotification from 'react-native-push-notification';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 
@@ -94,37 +93,7 @@ export default function MedicationReminderScreen({ route, navigation }: Medicati
     calculateAdherence();
   }, []);
 
-  const setupNotifications = () => {
-    PushNotification.configure({
-      onRegister: function (token) {
-        console.log('TOKEN:', token);
-      },
-      onNotification: function (notification) {
-        console.log('NOTIFICATION:', notification);
-      },
-      permissions: {
-        alert: true,
-        badge: true,
-        sound: true,
-      },
-      popInitialNotification: true,
-      requestPermissions: true,
-    });
 
-    // Create notification channel for Android
-    if (Platform.OS === 'android') {
-      PushNotification.createChannel(
-        {
-          channelId: 'medication-reminder',
-          channelName: 'İlaç Hatırlatıcıları',
-          channelDescription: 'İlaç alma zamanı bildirimleri',
-          importance: 4,
-          vibrate: true,
-        },
-        (created) => console.log(`createChannel returned '${created}'`)
-      );
-    }
-  };
 
   const loadMedications = async () => {
     try {
@@ -170,35 +139,8 @@ export default function MedicationReminderScreen({ route, navigation }: Medicati
     setTodayReminders(reminders);
   };
 
-  const scheduleNotifications = (medication: Medication) => {
-    medication.times.forEach((time, index) => {
-      const [hours, minutes] = time.split(':').map(Number);
-      const notificationTime = new Date();
-      notificationTime.setHours(hours, minutes, 0, 0);
 
-      // If time has passed today, schedule for tomorrow
-      if (notificationTime < new Date()) {
-        notificationTime.setDate(notificationTime.getDate() + 1);
-      }
 
-      PushNotification.localNotificationSchedule({
-        channelId: 'medication-reminder',
-        title: '💊 İlaç Zamanı!',
-        message: `${medication.name} (${medication.dosage}) almanız gerekiyor`,
-        date: notificationTime,
-        repeatType: 'day',
-        id: `${medication.id}_${index}`,
-        userInfo: { medicationId: medication.id, time },
-      });
-    });
-  };
-
-  const cancelNotifications = (medicationId: string) => {
-    // Cancel all notifications for this medication
-    for (let i = 0; i < 10; i++) {
-      PushNotification.cancelLocalNotification(`${medicationId}_${i}`);
-    }
-  };
 
   const addMedication = () => {
     if (!formData.name || !formData.dosage) {

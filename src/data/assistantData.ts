@@ -2,6 +2,7 @@
 
 export interface AssistantInfo {
   id: number;
+  name?: string; // For backward compatibility
   nameKey: string; // Translation key for the name
   icon: string;
   color: string;

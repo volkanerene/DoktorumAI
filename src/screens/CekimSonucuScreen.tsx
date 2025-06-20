@@ -30,6 +30,7 @@ import {
   Asset 
 } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
+import { useLanguage } from '../context/LanguageContext';
 import LinearGradient from 'react-native-linear-gradient';
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
@@ -89,7 +90,7 @@ export default function CekimSonucuScreen({ route, navigation }: CekimSonucuScre
   const [selectedBodyPart, setSelectedBodyPart] = useState<string>('');
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [expandedAnalysis, setExpandedAnalysis] = useState<string | null>(null);
-  
+  const { t, language } = useLanguage();
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -206,6 +207,7 @@ export default function CekimSonucuScreen({ route, navigation }: CekimSonucuScre
         user_image: selectedFile.base64,
         fileName: selectedFile.fileName || `radiology_${Date.now()}.jpg`,
         caption: JSON.stringify(metadata),
+        language,
       };
       
       const response = await axios.post(`${SERVER_URL}?action=analyzeCekim`, data);

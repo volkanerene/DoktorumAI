@@ -17,16 +17,15 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { assistantS, getAssistantName, getAssistantApiName } from '../data/assistantData';
 import { useLanguage } from '../context/LanguageContext';
 
-type assistantSelectionProps = StackScreenProps<RootStackParamList, 'assistantSelection'>;
+type assistantSelectionProps = StackScreenProps<RootStackParamList, 'AssistantSelection'>;
 
-export default function assistantSelectionScreen({ route, navigation }: assistantSelectionProps) {
+export default function AssistantSelectionScreen({ route, navigation }: assistantSelectionProps) {
   const { userId } = route.params;
   const { t } = useLanguage();
-  const handleassistantSelect = (nameKey: string) => {
-    // Use API name for backend communication
-    const apiName = getAssistantApiName(nameKey);
-    navigation.navigate('Chat', { userId, assistantName: apiName });
-  };
+const handleassistantSelect = (nameKey: string) => {
+  const apiName = getAssistantApiName(nameKey);
+  navigation.navigate('Chat', { userId, assistantName: apiName });
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -41,7 +40,7 @@ export default function assistantSelectionScreen({ route, navigation }: assistan
           <TouchableOpacity
             key={assistant.id}
             style={[styles.card, { backgroundColor: assistant.color }]}
-            onPress={() => handleassistantSelect(assistant.name)}
+            onPress={() => handleassistantSelect(assistant.nameKey)}
           >
             {assistant.library === 'MaterialIcons' ? (
               <MaterialIcons

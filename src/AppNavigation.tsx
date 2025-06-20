@@ -9,7 +9,7 @@ import FirstScreen from './screens/FirstScreen';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import HomeScreen from './screens/HomeScreen';
-import assistantSelectionScreen from './screens/assistantSelectionScreen';
+import AssistantSelectionScreen from './screens/AssistantSelectionScreen';
 import ChatScreen from './screens/ChatScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -31,7 +31,7 @@ export type RootStackParamList = {
   CekimSonucu: { userId: string };
   Tahlil: { userId: string };
   Home: { userId: string; userName: string };
-  assistantSelection: { userId: string };
+  AssistantSelection: { userId: string };
   Chat: { userId: string; assistantName?: string };
   History: { userId: string };
   NobetciEczaneler: undefined;
@@ -53,7 +53,7 @@ export default function AppNavigation() {
         <Stack.Screen name="EmergencySOS" component={EmergencySOSScreen} />
         <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="assistantSelection" component={assistantSelectionScreen} />
+        <Stack.Screen name="AssistantSelection" component={AssistantSelectionScreen} />
         <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="CekimSonucu" component={CekimSonucuScreen} />
         <Stack.Screen name="Tahlil" component={TahlilScreen} />

@@ -19,6 +19,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageResizer from 'react-native-image-resizer';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useLanguage } from '../context/LanguageContext';
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 
@@ -50,7 +51,7 @@ type ProfileScreenProps = StackScreenProps<RootStackParamList, 'Profile'>;
 
 export default function ProfileScreen({ route, navigation }: ProfileScreenProps) {
   const { userId } = route.params;
-
+  const { t, language, setLanguage } = useLanguage();
   // For profile photo URL
   const [profilePhoto, setProfilePhoto] = useState<string>('');
   // For question answers
@@ -174,7 +175,10 @@ export default function ProfileScreen({ route, navigation }: ProfileScreenProps)
       Alert.alert("Hata", "Fotoğraf seçilemedi.");
     }
   };
-
+const handleLanguageChange = async (lang: 'tr' | 'en') => {
+  await setLanguage(lang);
+  Alert.alert(t('common.success'), t('profile.languageChanged'));
+};
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('userData');
@@ -280,6 +284,39 @@ export default function ProfileScreen({ route, navigation }: ProfileScreenProps)
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Text style={styles.logoutButtonText}>Çıkış Yap</Text>
           </TouchableOpacity>
+          <View style={styles.languageSection}>
+  <Text style={styles.sectionTitle}>{t('profile.language')}</Text>
+  <View style={styles.languageButtons}>
+    <TouchableOpacity
+      style={[
+        styles.languageButton,
+        language === 'tr' && styles.languageButtonActive
+      ]}
+      onPress={() => handleLanguageChange('tr')}
+    >
+      <Text style={[
+        styles.languageButtonText,
+        language === 'tr' && styles.languageButtonTextActive
+      ]}>
+        {t('profile.turkish')}
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[
+        styles.languageButton,
+        language === 'en' && styles.languageButtonActive
+      ]}
+      onPress={() => handleLanguageChange('en')}
+    >
+      <Text style={[
+        styles.languageButtonText,
+        language === 'en' && styles.languageButtonTextActive
+      ]}>
+        {t('profile.english')}
+      </Text>
+    </TouchableOpacity>
+  </View>
+</View>
         <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
           <MaterialIcons name="delete-forever" size={20} color="#FF3B30" />
           <Text style={styles.deleteAccountText}>Hesabı Sil</Text>
@@ -299,6 +336,41 @@ export default function ProfileScreen({ route, navigation }: ProfileScreenProps)
 }
 
 const styles = StyleSheet.create({
+  languageSection: {
+  marginVertical: 20,
+  paddingHorizontal: 20,
+},
+sectionTitle: {
+  color: '#fff',
+  fontSize: 18,
+  fontWeight: '600',
+  marginBottom: 12,
+},
+languageButtons: {
+  flexDirection: 'row',
+  gap: 12,
+},
+languageButton: {
+  flex: 1,
+  backgroundColor: '#222',
+  paddingVertical: 12,
+  borderRadius: 8,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#333',
+},
+languageButtonActive: {
+  backgroundColor: '#C8FF00',
+  borderColor: '#C8FF00',
+},
+languageButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '500',
+},
+languageButtonTextActive: {
+  color: '#000',
+},
   container: {
     flex: 1,
     backgroundColor: '#000',

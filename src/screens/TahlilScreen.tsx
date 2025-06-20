@@ -29,6 +29,8 @@ import {
   Asset 
 } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
+import { useLanguage } from '../context/LanguageContext';
+
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width } = Dimensions.get('window');
@@ -68,6 +70,7 @@ export default function TahlilScreen({ route, navigation }: TahlilScreenProps) {
   const [showTips, setShowTips] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     fetchHistory();
@@ -154,7 +157,8 @@ export default function TahlilScreen({ route, navigation }: TahlilScreenProps) {
         specialty: "Tahlil",
         user_image: selectedFile.base64,
         fileName: selectedFile.fileName || `tahlil_${Date.now()}.jpg`,
-        caption: caption || "[Tahlil Sonucu]"
+        caption: caption || "[Tahlil Sonucu]",
+        language,
       };
       
       const response = await axios.post(`${SERVER_URL}?action=analyzeTahlil`, data);

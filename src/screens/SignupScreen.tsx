@@ -125,12 +125,22 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
           'userData',
           JSON.stringify({ userId: apiRes.data.user_id, userName: apiRes.data.name, userType: 'social' })
         );
-        navigation.reset({
-          index: 0,
-          routes: [
-            { name: 'Home', params: { userId: apiRes.data.user_id, userName: apiRes.data.name, userType: 'social' } },
-          ],
-        });
+        if (res.data.success) {
+          await AsyncStorage.setItem(
+            'userData',
+            JSON.stringify({ userId: res.data.user_id, userName: res.data.name, userType: 'social' })
+          );
+          
+          Alert.alert('Başarılı', `Hoş geldin, ${res.data.name}`);
+          
+          // Direkt Onboarding'e yönlendir
+          navigation.reset({
+            index: 0,
+            routes: [
+              { name: 'Onboarding', params: { userId: res.data.user_id, userName: res.data.name } },
+            ],
+          });
+        }
       } else {
         Alert.alert('Hata', apiRes.data.error || 'Sunucu hatası');
       }
@@ -303,15 +313,23 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
         </View>
         
         <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignup}>
+          <TouchableOpacity 
+            style={[
+              styles.googleButton,
+              Platform.OS === 'ios' ? {} : { flex: 1 } // Android'de tam genişlik
+            ]} 
+            onPress={handleGoogleSignup}
+          >
             <Text style={styles.socialButtonText}>GOOGLE</Text>
           </TouchableOpacity>
           
           {/* Apple Sign In */}
-          <TouchableOpacity style={styles.appleButton} onPress={handleAppleSignup}>
-            <MaterialIcons name="apple" size={16} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={styles.socialButtonText}>APPLE</Text>
-          </TouchableOpacity>
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity style={styles.appleButton} onPress={handleAppleSignup}>
+              <MaterialIcons name="apple" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.socialButtonText}>APPLE</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
       </View>
@@ -451,18 +469,22 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     fontSize: 12,
   },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  googleButton: {
-    backgroundColor: '#DB4437',
-    borderRadius: 8,
-    paddingVertical: 12,
-    flex: 1,
-    marginRight: 10,
-    alignItems: 'center',
-  },
+socialButtons: {
+  flexDirection: 'row',
+  justifyContent: Platform.OS === 'ios' ? 'space-between' : 'center',
+  gap: Platform.OS === 'ios' ? 10 : 0,
+},
+
+// googleButton style'ını güncelle:
+googleButton: {
+  backgroundColor: '#DB4437',
+  borderRadius: 8,
+  paddingVertical: 12,
+  flex: Platform.OS === 'ios' ? 1 : 0,
+  minWidth: Platform.OS === 'ios' ? 0 : '80%',
+  alignItems: 'center',
+  marginRight: Platform.OS === 'ios' ? 10 : 0,
+},
   socialButtonText: {
     color: '#fff',
     fontWeight: 'bold',

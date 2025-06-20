@@ -39,45 +39,43 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const initializeSubscription = async () => {
-    try {
-      // Check subscription status
-      const subscriptionData = await AsyncStorage.getItem('subscription_data');
-      if (subscriptionData) {
-        const data = JSON.parse(subscriptionData);
-        setIsPremium(data.isPremium || false);
+  try {
+    const subscriptionData = await AsyncStorage.getItem('subscription_data');
+    if (subscriptionData) {
+      const data = JSON.parse(subscriptionData);
         
-        // Check trial status
-        if (data.trialEndDate) {
-          const endDate = new Date(data.trialEndDate);
-          if (endDate > new Date()) {
-            setTrialEndDate(endDate);
-            setIsPremium(true); // Trial users have premium features
-          } else {
-            // Trial expired
-            setTrialEndDate(null);
-            if (data.isPremium === undefined) {
-              setIsPremium(false);
-            }
+      // Trial kontrolü
+      if (data.trialEndDate) {
+        const endDate = new Date(data.trialEndDate);
+        if (endDate > new Date()) {
+          setTrialEndDate(endDate);
+          setIsPremium(true);
+        } else {
+          // Trial bitmiş
+          setTrialEndDate(null);
+          // Eğer premium satın alınmamışsa free'ye dön
+          if (!data.isPremium || data.isPremium === true && data.trialEndDate) {
+            setIsPremium(false);
           }
         }
+      } else {
+        setIsPremium(data.isPremium || false);
       }
-
-      // Check daily message count
-      const today = new Date().toDateString();
-      const messageData = await AsyncStorage.getItem('daily_messages');
-      if (messageData) {
-        const data = JSON.parse(messageData);
-        if (data.date === today) {
-          setDailyMessageCount(data.count || 0);
-        } else {
-          // New day, reset count
-          await resetDailyLimits();
-        }
       }
-    } catch (error) {
-      console.error('Error initializing subscription:', error);
+      await checkAndResetDailyLimits(); 
+    // Mesaj sayısını yükle
+    const today = new Date().toDateString();
+    const messageData = await AsyncStorage.getItem('daily_messages');
+    if (messageData) {
+      const data = JSON.parse(messageData);
+      if (data.date === today) {
+        setDailyMessageCount(data.count || 0);
+      }
     }
-  };
+  } catch (error) {
+    console.error('Error initializing subscription:', error);
+  }
+};
 
   const checkAndResetDailyLimits = async () => {
     const today = new Date().toDateString();

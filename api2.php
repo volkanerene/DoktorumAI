@@ -313,7 +313,7 @@ if (isset($_GET['action'])) {
             if (!isset($input['user_id'], $input['health_data'])) {
                 handleError("user_id and health_data required.");
             }
-            
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             $userId = (int)$input['user_id'];
             $healthData = $input['health_data'];
             
@@ -355,7 +355,7 @@ if (isset($_GET['action'])) {
             if (!isset($_FILES['photo']) || !isset($_POST['user_id'])) {
                 handleError("Photo or user_id missing.");
             }
-
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             $userId = (int)$_POST['user_id'];
             $uploadDir = __DIR__ . '/uploads/profile_pics/';
             $uploadUrl = 'https://www.prokoc2.com/uploads/profile_pics/';
@@ -392,7 +392,7 @@ if (isset($_GET['action'])) {
                 handleError("user_id parameter is required");
             }
             $userId = intval($input['user_id']);
-        
+        $language = isset($input['language']) ? $input['language'] : 'tr';
             $stmt = $conn->prepare("DELETE FROM users3 WHERE id = ?");
             if (!$stmt) {
                 handleError("SQL Prepare Error: " . $conn->error);
@@ -448,7 +448,7 @@ if (isset($_GET['action'])) {
             $email = trim($input['email']);
             $password = trim($input['password']);
             $name = isset($input['name']) ? trim($input['name']) : '';
-
+$language = isset($input['language']) ? $input['language'] : 'tr';
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 handleError("Invalid email format.");
             }
@@ -484,7 +484,7 @@ if (isset($_GET['action'])) {
             $token    = isset($input['token']) ? trim($input['token']) : '';
             $name     = isset($input['name']) ? trim($input['name'])  : '';
             $email    = isset($input['email']) ? trim($input['email']) : '';
-
+$language = isset($input['language']) ? $input['language'] : 'tr';
             if (!$provider || !$token) {
                 handleError("provider and token required.");
             }
@@ -584,7 +584,7 @@ if (isset($_GET['action'])) {
             $input = json_decode(file_get_contents('php://input'), true);
             if (!isset($input['email'])) handleError("email required");
             $email = trim($input['email']);
-
+$language = isset($input['language']) ? $input['language'] : 'tr';
             $stmt = $conn->prepare("SELECT id FROM users3 WHERE email = ? LIMIT 1");
             $stmt->bind_param("s", $email);
             $stmt->execute();
@@ -613,7 +613,7 @@ if (isset($_GET['action'])) {
         // Analyze MRI/X-Ray
         case 'analyzeCekim':
             debugLog("analyzeCekim route invoked");
-            
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             $input = json_decode(file_get_contents('php://input'), true);
             if ($input) {
                 $userId    = (int)$input['user_id'];
@@ -672,7 +672,7 @@ if (isset($_GET['action'])) {
         // Analyze lab test
         case 'analyzeTahlil':
             debugLog("analyzeTahlil route invoked");
-            
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             $input = json_decode(file_get_contents('php://input'), true);
             if ($input) {
                 $userId    = (int)$input['user_id'];
@@ -737,7 +737,7 @@ if (isset($_GET['action'])) {
             }
             $email = trim($input['email']);
             $password = trim($input['password']);
-        
+        $language = isset($input['language']) ? $input['language'] : 'tr';
             $stmt = $conn->prepare("SELECT id, name, password FROM users3 WHERE email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
@@ -816,7 +816,7 @@ if (isset($_GET['action'])) {
                 handleError("user_id missing.");
             }
             $userId = (int)$_GET['user_id'];
-
+$language = isset($input['language']) ? $input['language'] : 'tr';
             $stmt = $conn->prepare("SELECT profile_photo, answers, language FROM user_profile WHERE user_id = ? LIMIT 1");
             $stmt->bind_param("i", $userId);
             $stmt->execute();
@@ -841,7 +841,7 @@ if (isset($_GET['action'])) {
         // Send image
         case 'sendImage':
             debugLog("sendImage route invoked");
-            
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             $input = json_decode(file_get_contents('php://input'), true);
             if ($input) {
                 $userId    = (int)$input['user_id'];
@@ -912,6 +912,7 @@ if (isset($_GET['action'])) {
             if (!isset($_GET['user_id'])) {
                 handleError("user_id missing.");
             }
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             $userId = (int)$_GET['user_id'];
             $stmt = $conn->prepare("
                 SELECT specialty, role, message, created_at
@@ -938,7 +939,7 @@ if (isset($_GET['action'])) {
             }
             $userId = (int)$_GET['user_id'];
             $spec   = trim($_GET['specialty']);
-        
+        $language = isset($input['language']) ? $input['language'] : 'tr';
             $stmt = $conn->prepare("
                 SELECT id, specialty, role, message, created_at
                 FROM user_chats3
@@ -963,7 +964,7 @@ if (isset($_GET['action'])) {
             $lat = isset($_GET['lat']) ? floatval($_GET['lat']) : 0;
             $lng = isset($_GET['lng']) ? floatval($_GET['lng']) : 0;
             $radius = isset($_GET['radius']) ? intval($_GET['radius']) : 10;
-            
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             // Mock data for hospitals
             $hospitals = [
                 [
@@ -996,7 +997,7 @@ if (isset($_GET['action'])) {
             $number = $input['number'];
             $location = $input['location'];
             $timestamp = $input['timestamp'];
-            
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             // Here you would save to database
             echo json_encode(["success" => true, "message" => "Emergency call recorded", "debug" => $debug]);
             exit;
@@ -1008,7 +1009,7 @@ if (isset($_GET['action'])) {
             $location = $input['location'];
             $contactsNotified = $input['contacts_notified'];
             $timestamp = $input['timestamp'];
-            
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             // Here you would save to database and potentially send notifications
             echo json_encode(["success" => true, "message" => "SOS recorded", "debug" => $debug]);
             exit;
@@ -1016,6 +1017,7 @@ if (isset($_GET['action'])) {
         // Duty pharmacies
         case 'nobetciEczaneler':
             debugLog("nobetciEczaneler route");
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             $city = isset($_GET['city']) ? trim($_GET['city']) : '';
             debugLog("city param: $city");
             try {

@@ -125,6 +125,7 @@ export const translations = {
         afternoon: 'İyi günler',
         evening: 'İyi akşamlar',
       },
+      
       healthScore: 'Sağlık Puanınız',
       goodHealth: 'İyi durumdasınız',
       quickActions: 'Hızlı İşlemler',
@@ -214,6 +215,7 @@ export const translations = {
       support: 'Destek',
       version: 'Versiyon',
       profileSaved: 'Profiliniz kaydedildi',
+      languageChanged: 'Dil değiştirildi',
       photoUploaded: 'Fotoğraf başarıyla yüklendi',
       photoError: 'Fotoğraf yüklenirken hata oluştu',
     },
@@ -631,6 +633,7 @@ export const translations = {
       notificationsOn: 'On',
       notificationsOff: 'Off',
       subscription: 'Subscription',
+      languageChanged: 'Language changed',
       subscriptionActive: 'Premium Active',
       subscriptionInactive: 'Free Plan',
       manageSubscription: 'Manage Subscription',

@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
+  NativeModules,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
@@ -17,6 +18,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import * as Animatable from 'react-native-animatable';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type SubscriptionScreenProps = StackScreenProps<RootStackParamList, 'Subscription'>;
 
@@ -27,7 +29,20 @@ export default function SubscriptionScreen({ route, navigation }: SubscriptionSc
   const { t, language } = useLanguage();
   const { activateTrial } = useSubscription();
   const [loading, setLoading] = useState(false);
+  // Fiyat belirleme için locale kontrolü ekle
 
+    const getPrice = () => {
+      // Türkiye için kontrol
+      const locale = NativeModules.I18nManager?.localeIdentifier || 'en';
+      const isTurkey = locale.toLowerCase().includes('tr');
+      
+      return {
+        currency: isTurkey ? '₺' : '$',
+        amount: isTurkey ? '99' : '5',
+        text: isTurkey ? t('subscription.pricePerMonth') : t('subscription.pricePerMonthGlobal')
+      };
+    };
+    const priceInfo = getPrice();
   const features = [
     { icon: 'all-inclusive', text: t('subscription.features.unlimited') },
     { icon: 'image', text: t('subscription.features.imageAnalysis') },
@@ -63,19 +78,20 @@ export default function SubscriptionScreen({ route, navigation }: SubscriptionSc
     }
   };
 
-  const handleContinueFree = () => {
-    Alert.alert(
-      t('subscription.freeVersion'),
-      t('subscription.limitedFeatures'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.ok'),
-          onPress: () => navigateToHome(),
-        },
-      ]
-    );
-  };
+  const handleContinueFree = async () => {
+      await AsyncStorage.setItem(`subscription_shown_${userId}`, 'true');
+  Alert.alert(
+    t('subscription.freeVersion'),
+    t('subscription.limitedFeatures'),
+    [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.ok'),
+        onPress: () => navigateToHome(),
+      },
+    ]
+  );
+};
 
   const navigateToHome = () => {
     navigation.reset({
@@ -128,10 +144,10 @@ export default function SubscriptionScreen({ route, navigation }: SubscriptionSc
             </View>
             
             <Text style={styles.planTitle}>{t('subscription.monthlyPlan')}</Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>{price}</Text>
-              <Text style={styles.priceUnit}>/{t('subscription.monthlyPlan').toLowerCase()}</Text>
-            </View>
+          <View style={styles.priceContainer}>
+            <Text style={styles.price}>{priceInfo.currency}{priceInfo.amount}</Text>
+            <Text style={styles.priceUnit}>/{t('subscription.monthlyPlan').toLowerCase()}</Text>
+          </View>
             
             <Text style={styles.trialNote}>{t('subscription.trialEnds')}</Text>
             <Text style={styles.cancelNote}>{t('subscription.cancelAnytime')}</Text>

@@ -59,42 +59,42 @@ export default function OnboardingScreen({ route, navigation }: OnboardingScreen
     allergies: '',
   });
 
-  const requiredSteps = [
-    {
-      title: t('onboarding.birthDate'),
-      type: 'date',
-      field: 'birthDate',
-    },
-    {
-      title: t('onboarding.gender'),
-      type: 'select',
-      field: 'gender',
-      options: [
-        { value: 'male', label: t('onboarding.male') },
-        { value: 'female', label: t('onboarding.female') },
-        { value: 'other', label: t('onboarding.other') },
-      ],
-    },
-    {
-      title: t('onboarding.importantDiseases'),
-      type: 'text',
-      field: 'importantDiseases',
-      placeholder: t('onboarding.importantDiseasesPlaceholder'),
-      multiline: true,
-    },
-    {
-      title: t('onboarding.medications'),
-      type: 'text',
-      field: 'medications',
-      placeholder: t('onboarding.medicationsPlaceholder'),
-      multiline: true,
-    },
-    {
-      title: t('onboarding.surgeryHistory'),
-      type: 'boolean',
-      field: 'hadSurgery',
-    },
-  ];
+const requiredSteps = [
+  {
+    title: t('onboarding.birthDate'),
+    type: 'date',
+    field: 'birthDate',
+  },
+  {
+    title: t('onboarding.gender'),
+    type: 'select',
+    field: 'gender',
+    options: [
+      { value: 'male', label: t('onboarding.male') },
+      { value: 'female', label: t('onboarding.female') },
+      { value: 'other', label: t('onboarding.other') },
+    ],
+  },
+  {
+    title: t('onboarding.importantDiseases'),
+    type: 'text',
+    field: 'importantDiseases',
+    placeholder: t('onboarding.importantDiseasesPlaceholder'),
+    multiline: true,
+  },
+  {
+    title: t('onboarding.medications'),
+    type: 'text',
+    field: 'medications',
+    placeholder: t('onboarding.medicationsPlaceholder'),
+    multiline: true,
+  },
+  {
+    title: t('onboarding.surgeryHistory'),
+    type: 'boolean',
+    field: 'hadSurgery',
+  },
+];
 
   const optionalSteps = [
     {
