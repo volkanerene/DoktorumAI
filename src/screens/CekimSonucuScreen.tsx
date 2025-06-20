@@ -140,7 +140,7 @@ export default function CekimSonucuScreen({ route, navigation }: CekimSonucuScre
   const handleUploadFromGallery = () => {
     const options: ImageLibraryOptions = {
       mediaType: 'photo',
-      quality: 0.95,
+      quality: 1,
       includeBase64: true,
     };
     launchImageLibrary(options, (response) => {
@@ -154,7 +154,7 @@ export default function CekimSonucuScreen({ route, navigation }: CekimSonucuScre
   const handleTakePhoto = () => {
     const options: CameraOptions = {
       mediaType: 'photo',
-      quality: 0.95,
+      quality: 1,
       includeBase64: true,
     };
     launchCamera(options, (response) => {

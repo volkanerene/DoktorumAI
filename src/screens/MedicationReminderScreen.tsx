@@ -914,10 +914,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
   },
-  timeText: {
-    fontSize: 16,
-    color: '#333',
-  },
   colorOptions: {
     flexDirection: 'row',
     paddingHorizontal: 16,

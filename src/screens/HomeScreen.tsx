@@ -23,6 +23,8 @@ import LinearGradient from 'react-native-linear-gradient';
 import { assistantS } from '../data/assistantData';
 import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
+import { useSubscription } from '../context/SubscriptionContext';
+import NotificationService from '../services/NotificationService';
 
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
@@ -83,20 +85,35 @@ export default function HomeScreen({ route, navigation }: HomeScreenProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const { isPremium } = useSubscription();
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
     fetchData();
     animateIn();
-    
     // Rotate health tips
     const tipInterval = setInterval(() => {
       setCurrentTip((prev) => (prev + 1) % healthTips.length);
     }, 5000);
-    
+    requestNotificationPermission();
     return () => clearInterval(tipInterval);
   }, [userId]);
-
+  
+    const requestNotificationPermission = async () => {
+      if (Platform.OS === 'ios') {
+        const authStatus = await messaging().requestPermission();
+        const enabled = authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+                      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+        
+        if (enabled) {
+          // Günlük bildirimleri planla
+          NotificationService.scheduleDailyHealthTips(userId);
+        }
+      } else {
+        // Android otomatik izin verir
+        NotificationService.scheduleDailyHealthTips(userId);
+      }
+    };
   const animateIn = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -470,7 +487,7 @@ const getAssistantInfo = (rawSpecialty: string | undefined) => {
       subtitle={t('home.selectSpecialistDesc')}
       icon="medical-services"
       color="#EC4899"
-      onPress={() => navigation.navigate('assistantSelection', { userId })}
+      onPress={() => navigation.navigate('AssistantSelection', { userId })}
       delay={200}
     />
     <QuickActionCard

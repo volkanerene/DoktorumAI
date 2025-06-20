@@ -38,6 +38,8 @@ export type RootStackParamList = {
   Profile: { userId: string };
   Onboarding: { userId: string; userName: string };
   Subscription: { userId: string; userName: string };
+  HealthTracking: { userId: string; userName: string };
+  MedicationReminder: { userId: string; userName: string };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();

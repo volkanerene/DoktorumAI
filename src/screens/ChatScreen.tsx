@@ -626,34 +626,34 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 </View>
               )}
 
-              {item.specialistRecommendation && item.specialistRecommendation.length > 0 && (
-                <View style={styles.specialistContainer}>
-                  <Text style={styles.specialistTitle}>{t('chat.goToSpecialist')}</Text>
-                  <View style={styles.specialistButtons}>
-                    {item.specialistRecommendation.map((specialistKey, idx) => {
-                      const specialist = assistantS.find(a => a.nameKey === specialistKey);
-                      if (!specialist) return null;
-                      
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[styles.specialistButton, { backgroundColor: specialist.color }]}
-                          onPress={() => handleSpecialistRecommendation(specialistKey)}
-                        >
-                          {specialist.library === 'MaterialIcons' ? (
-                            <MaterialIcons name={specialist.icon} size={20} color="#fff" />
-                          ) : (
-                            <MaterialCommunityIcons name={specialist.icon} size={20} color="#fff" />
-                          )}
-                          <Text style={styles.specialistButtonText}>
-                            {getAssistantName(specialist.nameKey, t)}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
+{item.specialistRecommendation && item.specialistRecommendation.length > 0 && (
+  <View style={styles.specialistContainer}>
+    <Text style={styles.specialistTitle}>{t('chat.goToSpecialist')}</Text>
+    <View style={styles.specialistButtons}>
+      {item.specialistRecommendation.map((specialistKey, idx) => {
+        const specialist = assistantS.find(a => a.nameKey === specialistKey);
+        if (!specialist) return null;
+        
+        return (
+          <TouchableOpacity
+            key={idx}
+            style={[styles.specialistButton, { backgroundColor: specialist.color }]}
+            onPress={() => handleSpecialistRecommendation(specialistKey)}
+          >
+            {specialist.library === 'MaterialIcons' ? (
+              <MaterialIcons name={specialist.icon} size={20} color="#fff" />
+            ) : (
+              <MaterialCommunityIcons name={specialist.icon} size={20} color="#fff" />
+            )}
+            <Text style={styles.specialistButtonText}>
+              {getAssistantName(specialist.nameKey, t)}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  </View>
+)}
               
               {item.createdAt && (
                 <Text style={styles.messageTime}>{item.createdAt}</Text>
@@ -783,17 +783,23 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <MaterialIcons name="photo" size={24} color="#666" />
             </TouchableOpacity>
             
-            <TouchableOpacity 
-              onPress={handleVoiceMessage} 
-              disabled={loading} 
-              style={styles.inputButton}
-            >
-              <MaterialIcons 
-                name={isListening ? "mic" : "mic-none"} 
-                size={24} 
-                color={isListening ? "#FF0000" : "#666"} 
-              />
-            </TouchableOpacity>
+<TouchableOpacity 
+  onPress={handleVoiceMessage} 
+  disabled={loading} 
+  style={[
+    styles.inputButton,
+    isListening && styles.inputButtonActive
+  ]}
+>
+  <MaterialIcons 
+    name={isListening ? "mic" : "mic-none"} 
+    size={24} 
+    color={isListening ? "#FF0000" : "#666"} 
+  />
+  {isListening && (
+    <Animated.View style={styles.listeningIndicator} />
+  )}
+</TouchableOpacity>
             
             <TextInput
               ref={inputRef}
@@ -1098,36 +1104,36 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     textDecorationLine: 'underline',
   },
-  specialistContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-  },
-  specialistTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  specialistButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  specialistButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  specialistButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
+specialistContainer: {
+  marginTop: 12,
+  paddingTop: 12,
+  borderTopWidth: 1,
+  borderTopColor: 'rgba(0,0,0,0.1)',
+},
+specialistTitle: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#333',
+  marginBottom: 8,
+},
+specialistButtons: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 8,
+},
+specialistButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 20,
+  gap: 6,
+},
+specialistButtonText: {
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: '500',
+},
   quickActions: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -1308,4 +1314,17 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
   },
+  inputButtonActive: {
+  backgroundColor: 'rgba(255, 0, 0, 0.1)',
+  borderRadius: 20,
+},
+listeningIndicator: {
+  position: 'absolute',
+  width: 8,
+  height: 8,
+  borderRadius: 4,
+  backgroundColor: '#FF0000',
+  top: 4,
+  right: 4,
+},
 });

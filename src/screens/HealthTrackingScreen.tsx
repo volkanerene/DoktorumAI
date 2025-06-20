@@ -632,20 +632,18 @@ export default function HealthTrackingScreen({ route, navigation }: HealthTracki
         </View>
       </Modal>
 
-      {showDatePicker && (
-        <DateTimePicker
-          value={inputDate}
-          mode="datetime"
-          is24Hour={true}
-          display="default"
-          onChange={(event, date) => {
-            setShowDatePicker(false);
-            if (date) {
-              setInputDate(date);
-            }
-          }}
-        />
-      )}
+{showDatePicker && (
+  <DateTimePicker
+    value={inputDate}
+    mode="datetime"
+    display="default"
+    onChange={(event, date) => {
+      setShowDatePicker(false);
+      if (date) setInputDate(date);
+    }}
+    {...({ is24Hour: true } as any)}
+  />
+)}
     </SafeAreaView>
   );
 }

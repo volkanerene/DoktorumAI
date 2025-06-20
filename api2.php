@@ -161,55 +161,205 @@ function callOpenAI($userId, $specialty, $userMessage, $language = 'tr', $imageD
 }
 
 function parseSpecialistRecommendations($reply, $language) {
-    // Look for specialist recommendations in the reply
-    $specialists = [
-        'tr' => [
-            'kardiyoloji' => 'assistants.cardiology',
-            'dermatoloji' => 'assistants.dermatology',
-            'pediatri' => 'assistants.pediatrics',
-            'psikoloji' => 'assistants.psychology',
-            'nöroloji' => 'assistants.neurology',
-            'ortopedi' => 'assistants.orthopedics',
-            'üroloji' => 'assistants.urology',
-            'göz' => 'assistants.ophthalmology',
-            'kadın doğum' => 'assistants.gynecology',
-            'kulak burun boğaz' => 'assistants.ent',
-        ],
-        'en' => [
-            'cardiology' => 'assistants.cardiology',
-            'dermatology' => 'assistants.dermatology',
-            'pediatrics' => 'assistants.pediatrics',
-            'psychology' => 'assistants.psychology',
-            'neurology' => 'assistants.neurology',
-            'orthopedics' => 'assistants.orthopedics',
-            'urology' => 'assistants.urology',
-            'ophthalmology' => 'assistants.ophthalmology',
-            'gynecology' => 'assistants.gynecology',
-            'ent' => 'assistants.ent',
-        ]
-    ];
-    
-    $recommendations = [];
-    $specialistList = $specialists[$language] ?? $specialists['en'];
-    
-    foreach ($specialistList as $keyword => $nameKey) {
-        if (stripos($reply, $keyword) !== false) {
-            $recommendations[] = $nameKey;
-        }
+    // Yanıt içinde uzman önerilerini ara
+    $pattern = '/\[Uzman Önerisi:\s*([^\]]+)\]/i';
+    if ($language === 'en') {
+        $pattern = '/\[Specialist Recommendation:\s*([^\]]+)\]/i';
     }
     
-    // If recommendations found, add them as JSON
-    if (!empty($recommendations)) {
-        $result = [
-            'text' => $reply,
-            'specialistRecommendation' => $recommendations
-        ];
-        return json_encode($result, JSON_UNESCAPED_UNICODE);
+    preg_match_all($pattern, $reply, $matches);
+    
+    if (!empty($matches[1])) {
+        $recommendations = [];
+        
+        foreach ($matches[1] as $specialist) {
+            $specialist = trim(strtolower($specialist));
+            
+            // Türkçe ve İngilizce eşleştirmeler
+            $specialistMap = [
+                // Türkçe
+                'kardiyoloji' => 'assistants.cardiology',
+                'dermatoloji' => 'assistants.dermatology',
+                'pediatri' => 'assistants.pediatrics',
+                'çocuk' => 'assistants.pediatrics',
+                'psikoloji' => 'assistants.psychology',
+                'nöroloji' => 'assistants.neurology',
+                'ortopedi' => 'assistants.orthopedics',
+                'üroloji' => 'assistants.urology',
+                'göz' => 'assistants.ophthalmology',
+                'kadın doğum' => 'assistants.gynecology',
+                'kulak burun boğaz' => 'assistants.ent',
+                'kbb' => 'assistants.ent',
+                'endokrinoloji' => 'assistants.endocrinology',
+                'gastroenteroloji' => 'assistants.gastroenterology',
+                'hematoloji' => 'assistants.hematology',
+                'nefroloji' => 'assistants.nephrology',
+                'romatoloji' => 'assistants.rheumatology',
+                'diş' => 'assistants.dental',
+                'beslenme' => 'assistants.nutrition',
+                'onkoloji' => 'assistants.oncology',
+                'alerji' => 'assistants.allergy',
+                'göğüs' => 'assistants.pulmonology',
+                
+                // English
+                'cardiology' => 'assistants.cardiology',
+                'dermatology' => 'assistants.dermatology',
+                'pediatrics' => 'assistants.pediatrics',
+                'psychology' => 'assistants.psychology',
+                'neurology' => 'assistants.neurology',
+                'orthopedics' => 'assistants.orthopedics',
+                'urology' => 'assistants.urology',
+                'ophthalmology' => 'assistants.ophthalmology',
+                'gynecology' => 'assistants.gynecology',
+                'ent' => 'assistants.ent',
+                'endocrinology' => 'assistants.endocrinology',
+                'gastroenterology' => 'assistants.gastroenterology',
+                'hematology' => 'assistants.hematology',
+                'nephrology' => 'assistants.nephrology',
+                'rheumatology' => 'assistants.rheumatology',
+                'dental' => 'assistants.dental',
+                'nutrition' => 'assistants.nutrition',
+                'oncology' => 'assistants.oncology',
+                'allergy' => 'assistants.allergy',
+                'pulmonology' => 'assistants.pulmonology',
+            ];
+            
+            if (isset($specialistMap[$specialist])) {
+                $recommendations[] = $specialistMap[$specialist];
+            }
+        }
+        
+        if (!empty($recommendations)) {
+            // Önerileri metinden temizle
+            $cleanedReply = preg_replace($pattern, '', $reply);
+            
+            $result = [
+                'text' => trim($cleanedReply),
+                'specialistRecommendation' => array_unique($recommendations)
+            ];
+            return json_encode($result, JSON_UNESCAPED_UNICODE);
+        }
     }
     
     return $reply;
 }
+function scheduleUserNotifications($userId) {
+    global $conn;
+    
+    // Kullanıcının chat geçmişini analiz et
+    $topics = analyzeUserHealthTopics($userId);
+    
+    // Mevcut bildirimleri temizle
+    $stmt = $conn->prepare("DELETE FROM user_notifications WHERE user_id = ? AND is_sent = 0");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+    
+    // Genel sağlık bildirimleri
+    $generalNotifications = [
+        [
+            'type' => 'water',
+            'title' => 'Su İçmeyi Unutma! 💧',
+            'message' => 'Günde 8 bardak su içmeyi hedefleyin',
+            'hour' => 10
+        ],
+        [
+            'type' => 'steps',
+            'title' => 'Hareket Zamanı! 🚶',
+            'message' => 'Bugün 10.000 adım hedefine ulaşabilir misiniz?',
+            'hour' => 15
+        ],
+        [
+            'type' => 'health_tip',
+            'title' => 'Sağlık İpucu 💚',
+            'message' => 'Düzenli uyku, sağlıklı yaşamın temelidir',
+            'hour' => 20
+        ]
+    ];
+    
+    // Konuşma geçmişine göre özel bildirimler
+    if (in_array('diet', $topics)) {
+        $generalNotifications[] = [
+            'type' => 'diet',
+            'title' => 'Beslenme Hatırlatıcısı 🥗',
+            'message' => 'Bugün sebze ve meyve tüketmeyi unutmayın',
+            'hour' => 12
+        ];
+    }
+    
+    if (in_array('exercise', $topics)) {
+        $generalNotifications[] = [
+            'type' => 'exercise',
+            'title' => 'Egzersiz Zamanı 💪',
+            'message' => 'Bugünkü egzersiz rutininizi tamamladınız mı?',
+            'hour' => 18
+        ];
+    }
+    
+    // Bildirimleri veritabanına kaydet
+    foreach ($generalNotifications as $notif) {
+        $scheduledTime = new DateTime();
+        $scheduledTime->setTime($notif['hour'], 0, 0);
+        
+        // Eğer zaman geçmişse yarına planla
+        if ($scheduledTime < new DateTime()) {
+            $scheduledTime->modify('+1 day');
+        }
+        
+        $stmt = $conn->prepare("
+            INSERT INTO user_notifications (user_id, type, title, message, scheduled_time) 
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $timeStr = $scheduledTime->format('Y-m-d H:i:s');
+        $stmt->bind_param("issss", $userId, $notif['type'], $notif['title'], $notif['message'], $timeStr);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
 
+function analyzeUserHealthTopics($userId) {
+    global $conn;
+    
+    $topics = [];
+    
+    // Son 7 günün mesajlarını al
+    $stmt = $conn->prepare("
+        SELECT message 
+        FROM user_chats3 
+        WHERE user_id = ? 
+        AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    ");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $keywords = [
+        'diet' => ['kilo', 'diyet', 'yemek', 'beslen', 'weight', 'diet', 'food'],
+        'exercise' => ['egzersiz', 'spor', 'hareket', 'yürü', 'exercise', 'sport'],
+        'sleep' => ['uyku', 'uykusuzluk', 'yorgun', 'sleep', 'tired'],
+        'stress' => ['stres', 'endişe', 'kaygı', 'stress', 'anxiety']
+    ];
+    
+    while ($row = $result->fetch_assoc()) {
+        $message = strtolower($row['message']);
+        foreach ($keywords as $topic => $words) {
+            foreach ($words as $word) {
+                if (strpos($message, $word) !== false) {
+                    $topics[] = $topic;
+                    break;
+                }
+            }
+        }
+    }
+    
+    $stmt->close();
+    
+    return array_unique($topics);
+}
+
+
+
+// sendMessage action'ına bildirim planlama ekle
 function getTurkishSystemPrompt() {
     return <<<EOT
 Sen, sağlık ve tıbbi bilgiler konusunda geniş çaplı güncel literatürü değerlendirebilen, aynı zamanda görsel ve laboratuvar verisi analiz yeteneğine sahip gelişmiş bir yapay zekâ asistanısın. 
@@ -219,11 +369,14 @@ Sen, sağlık ve tıbbi bilgiler konusunda geniş çaplı güncel literatürü d
 
 Görevin, kullanıcıya gönderdikleri semptom fotoğraflarını, tahlil sonuçlarını veya yazılı sorularını alarak, en son bilimsel makaleler, klinik rehberler ve tıp dergilerindeki bilimsel çalışmalardan derlediğin bilgileri kullanarak detaylı, açık ve öğretici bir açıklama sunmaktır.
 
+Eğer kullanıcının bahsettiği semptomlar belirli bir uzmanlık alanını işaret ediyorsa, açıklamanın sonunda hangi uzmana gitmesi gerektiğini belirt. Birden fazla uzman önerebilirsin.
+
 Temel kurallar:
 1. Tıbbi teşhis koymazsın.
 2. Tedavi reçetesi yazmazsın.
 3. Kullanıcıya mutlaka "bir sağlık profesyoneline başvurun" uyarısı yaparsın.
 4. Verdiğin bilgilerin yalnızca eğitim ve genel bilgilendirme amaçlı olduğunu vurgularsın.
+5. Uygun gördüğün uzmanları [Uzman Önerisi: X] formatında belirt.
 
 Her önemli bilgi için kaynak göster:
 [1] Mayo Clinic, [2] WHO, [3] PubMed vb.
@@ -239,11 +392,14 @@ IMPORTANT: If referral to a specialist is needed, indicate it in this format:
 
 Your task is to provide detailed, clear, and educational explanations using the latest scientific articles, clinical guidelines, and medical journal studies.
 
+If the symptoms mentioned by the user indicate a specific specialty area, indicate which specialist they should see at the end of your explanation. You can recommend multiple specialists.
+
 Basic rules:
 1. Do not make medical diagnoses.
 2. Do not prescribe treatments.
 3. Always advise users to "consult a healthcare professional."
 4. Emphasize that the information is for educational purposes only.
+5. Indicate appropriate specialists in the format [Specialist Recommendation: X].
 
 Cite sources for important information:
 [1] Mayo Clinic, [2] WHO, [3] PubMed etc.
@@ -474,7 +630,32 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
             }
             $stmt->close();
             exit;
-
+            // API'ye yeni action ekle
+            case 'getScheduledNotifications':
+                $userId = $_GET['user_id'];
+                
+                $stmt = $conn->prepare("
+                    SELECT * FROM user_notifications 
+                    WHERE user_id = ? 
+                    AND is_sent = 0 
+                    AND scheduled_time > NOW()
+                    ORDER BY scheduled_time ASC
+                ");
+                $stmt->bind_param("i", $userId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $notifications = [];
+                while ($row = $result->fetch_assoc()) {
+                    $notifications[] = $row;
+                }
+                
+                echo json_encode([
+                    "success" => true,
+                    "notifications" => $notifications,
+                    "debug" => $debug
+                ]);
+                exit;
         // Login with social providers
         case 'loginSocial':
             debugLog("loginSocial route");
@@ -789,10 +970,35 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
             $stmt->bind_param("iss", $userId, $specialty, $userMessage);
             $stmt->execute();
             $stmt->close();
-
+    if ($stmt2->execute()) {
+        // Kullanıcının bildirimlerini güncelle
+        scheduleUserNotifications($userId);
+    }
             // Call OpenAI
             $assistantReply = callOpenAI($userId, $specialty, $userMessage, $language);
-
+            $messageType = isset($input['message_type']) ? $input['message_type'] : 'text';
+            
+            // Eğer sesli mesajsa, bunu belirt
+            if ($messageType === 'voice') {
+                $messageData = json_encode([
+                    'type' => 'voice',
+                    'text' => $userMessage,
+                    'timestamp' => date('Y-m-d H:i:s')
+                ], JSON_UNESCAPED_UNICODE);
+                
+                $stmt = $conn->prepare("
+                    INSERT INTO user_chats3 (user_id, specialty, role, message) 
+                    VALUES (?, ?, 'user', ?)
+                ");
+                $stmt->bind_param("iss", $userId, $specialty, $messageData);
+            } else {
+                // Normal text mesaj
+                $stmt = $conn->prepare("
+                    INSERT INTO user_chats3 (user_id, specialty, role, message) 
+                    VALUES (?, ?, 'user', ?)
+                ");
+                $stmt->bind_param("iss", $userId, $specialty, $userMessage);
+            }
             // Insert assistant reply
             $stmt2 = $conn->prepare("
                 INSERT INTO user_chats3 (user_id, specialty, role, message) 

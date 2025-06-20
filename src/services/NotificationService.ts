@@ -92,6 +92,104 @@ class NotificationService {
       PushNotificationIOS.cancelLocalNotifications({ id });
     }
   }
+  // Mevcut schedule fonksiyonları eksik, ekleyelim:
+
+async scheduleExerciseReminder(userId: string) {
+  this.cancel('exercise-reminder');
+  
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(14, 0, 0, 0);
+  
+  this.schedule({
+    id: 'exercise-reminder',
+    title: this.t('notifications.exerciseReminder'),
+    message: this.t('notifications.stepGoal'),
+    date,
+    repeatType: 'day',
+    userInfo: { type: 'exercise', userId },
+  });
+}
+
+async scheduleMedicationReminder(userId: string, medications: any[]) {
+  // İlaç hatırlatıcıları için
+  medications.forEach((med, index) => {
+    med.times.forEach((time: string, timeIndex: number) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      
+      if (date < new Date()) {
+        date.setDate(date.getDate() + 1);
+      }
+      
+      this.schedule({
+        id: `medication-${med.id}-${timeIndex}`,
+        title: this.t('notifications.medicationReminder'),
+        message: `${med.name} (${med.dosage})`,
+        date,
+        repeatType: 'day',
+        userInfo: { type: 'medication', userId, medicationId: med.id },
+      });
+    });
+  });
+}
+
+async schedulePersonalizedNotifications(userId: string, chatHistory: any[]) {
+  // Chat geçmişine göre kişiselleştirilmiş bildirimler
+  const topics = this.analyzeHealthTopics(chatHistory);
+  
+  if (topics.includes('sleep')) {
+    const date = new Date();
+    date.setHours(22, 0, 0, 0);
+    if (date < new Date()) date.setDate(date.getDate() + 1);
+    
+    this.schedule({
+      id: 'sleep-reminder',
+      title: this.t('notifications.sleepReminder'),
+      message: 'Kaliteli uyku için yatma vaktiniz geldi',
+      date,
+      repeatType: 'day',
+      userInfo: { type: 'sleep', userId },
+    });
+  }
+  
+  if (topics.includes('diet')) {
+    const date = new Date();
+    date.setHours(12, 30, 0, 0);
+    if (date < new Date()) date.setDate(date.getDate() + 1);
+    
+    this.schedule({
+      id: 'diet-reminder',
+      title: this.t('notifications.healthyEating'),
+      message: 'Öğle yemeğinde sağlıklı beslenmeyi unutmayın',
+      date,
+      repeatType: 'day',
+      userInfo: { type: 'diet', userId },
+    });
+  }
+}
+
+private analyzeHealthTopics(chatHistory: any[]): string[] {
+  const topics: string[] = [];
+  const keywords = {
+    sleep: ['uyku', 'uykusuzluk', 'yorgun', 'dinlen', 'sleep', 'tired', 'rest'],
+    diet: ['kilo', 'diyet', 'yemek', 'beslen', 'weight', 'diet', 'food', 'nutrition'],
+    exercise: ['egzersiz', 'spor', 'hareket', 'yürü', 'exercise', 'sport', 'walk'],
+    water: ['su', 'susuz', 'içecek', 'water', 'thirsty', 'drink'],
+  };
+  
+  chatHistory.forEach(msg => {
+    const text = msg.message.toLowerCase();
+    Object.entries(keywords).forEach(([topic, words]) => {
+      if (words.some(word => text.includes(word))) {
+        topics.push(topic);
+      }
+    });
+  });
+  
+  return [...new Set(topics)];
+}
 
   /* --------- Yüksek seviye API’lerin (senin eskileri) yeniden yazımı --------- */
 
@@ -120,8 +218,26 @@ class NotificationService {
     });
   }
 
-  /* …  diğer reminder fonksiyonlarını (exercise, diet, sleep, medication)  
-        sadece schedule(...) çağıracak şekilde aynı kalıpla yeniden yaz  … */
+  public async schedulePersonalizedNotifications(userId: string, messages: any[]) {
+    // cancel any previously‐scheduled personalized job
+    this.cancel(`personalized-${userId}`);
+
+    // pick a time for tomorrow at 9 AM (or whatever makes sense)
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(9, 0, 0, 0);
+
+    // you can customize the message using the last chat
+    const last = messages[messages.length - 1]?.text ?? this.t('notifications.genericTip');
+    this.schedule({
+      id: `personalized-${userId}`,
+      title: this.t('notifications.personalizedTitle'),
+      message: this.t('notifications.personalizedMessage').replace('{lastMessage}', last),
+      date,
+      repeatType: 'day',
+      userInfo: { type: 'personalized', userId },
+    });
+  }
 
   cancelAll() {
     if (Platform.OS === 'android' && PushNotificationAndroid) {

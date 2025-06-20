@@ -90,39 +90,36 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 const handleForgotPassword = () => navigation.navigate('PasswordReset');
   // ----- GUEST LOGIN -----
-  const handleGuestLogin = async () => {
-    
-    try {
-      const guestId = 'guest_' + Date.now();
-      const guestName = 'Misafir Kullanıcı';
-      const response = await guestId+guestName;
-      if (response.data.success) {
-        await AsyncStorage.setItem(
-          'userData',
-          JSON.stringify({ 
-            userId: response.data.user_id, 
-            userName: response.data.name, 
-            userType: 'registered' 
-          })
-        );
-        Alert.alert('Başarılı', 'Giriş yapıldı.');
-        const onboardingCompleted = await AsyncStorage.getItem(`onboarding_completed_${response.data.user_id}`);
-          if (!onboardingCompleted) {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Onboarding', params: { userId: response.data.user_id, userName: response.data.name } }],
-            });
-          } else {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Home', params: { userId: response.data.user_id, userName: response.data.name } }],
-            });
-          }
+const handleGuestLogin = async () => {
+  try {
+    const guestId = 'guest_' + Date.now();
+    const guestName = 'Misafir Kullanıcı';
+
+    // mock a “success” payload instead of concatenating strings
+    const payload = { success: true, user_id: guestId, name: guestName };
+
+    if (payload.success) {
+      await AsyncStorage.setItem(
+        'userData',
+        JSON.stringify({
+          userId: payload.user_id,
+          userName: payload.name,
+          userType: 'guest',
+        })
+      );
+      Alert.alert('Başarılı', 'Misafir olarak giriş yapıldı.');
+      const onboardKey = `onboarding_completed_${payload.user_id}`;
+      const onboardingCompleted = await AsyncStorage.getItem(onboardKey);
+      const nextRoute = onboardingCompleted ? 'Home' : 'Onboarding';
+      navigation.reset({
+        index: 0,
+        routes: [{ name: nextRoute, params: { userId: payload.user_id, userName: payload.name } }],
+      });
     }
-   } catch (error) {
-      Alert.alert('Hata', 'Misafir girişi başarısız.');
-    }
-  };
+  } catch {
+    Alert.alert('Hata', 'Misafir girişi başarısız.');
+  }
+};
 
 
   const handleGoogleLogin = async () => {
