@@ -21,6 +21,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
+import NotificationService from '../services/NotificationService';
 
 const { width } = Dimensions.get('window');
 
@@ -51,6 +52,23 @@ interface Reminder {
   skippedReason?: string;
 }
 
+  const setupNotifications = async () => {
+    // Bildirimler için izin kontrolü
+    if (Platform.OS === 'ios') {
+      // iOS için bildirim izni gerekli
+    }
+  };
+
+  const scheduleNotifications = (medication: Medication) => {
+    // Bildirim planlama - NotificationService kullanarak
+    console.log('Scheduling notifications for:', medication.name);
+  };
+
+  const cancelNotifications = (medicationId: string) => {
+    // Bildirim iptal etme
+    console.log('Canceling notifications for:', medicationId);
+  };
+  
 const MEDICATION_COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#DDA0DD', '#98D8C8', '#F7DC6F'
 ];

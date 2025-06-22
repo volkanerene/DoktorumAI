@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
   NativeModules,
+  Modal,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
@@ -23,12 +24,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type SubscriptionScreenProps = StackScreenProps<RootStackParamList, 'Subscription'>;
 
 const { width } = Dimensions.get('window');
-
 export default function SubscriptionScreen({ route, navigation }: SubscriptionScreenProps) {
   const { userId, userName } = route.params;
   const { t, language } = useLanguage();
   const { activateTrial } = useSubscription();
   const [loading, setLoading] = useState(false);
+  const [freeModalVisible, setFreeModalVisible] = useState(false);
+
   // Fiyat belirleme için locale kontrolü ekle
 
     const getPrice = () => {
@@ -79,19 +81,13 @@ export default function SubscriptionScreen({ route, navigation }: SubscriptionSc
   };
 
   const handleContinueFree = async () => {
-      await AsyncStorage.setItem(`subscription_shown_${userId}`, 'true');
-  Alert.alert(
-    t('subscription.freeVersion'),
-    t('subscription.limitedFeatures'),
-    [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.ok'),
-        onPress: () => navigateToHome(),
-      },
-    ]
-  );
+  setFreeModalVisible(true);
 };
+ const confirmFreePlan = async () => {
+   await AsyncStorage.setItem(`subscription_shown_${userId}`, 'true');
+   setFreeModalVisible(false);
+   navigateToHome();
+ };
 
   const navigateToHome = () => {
     navigation.reset({
@@ -100,120 +96,156 @@ export default function SubscriptionScreen({ route, navigation }: SubscriptionSc
     });
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.gradient}
+return (
+  <SafeAreaView style={styles.container}>
+    <LinearGradient
+      colors={['#667eea', '#764ba2']}
+      style={styles.gradient}
+    >
+      {/* X (kapat) */}
+      <View style={styles.closeButtonContainer}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={handleContinueFree}
+        >
+          <MaterialIcons name="close" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.closeButtonContainer}>
+
+        {/* HEADER  -------------------------------------------------- */}
+        <Animatable.View
+          animation="fadeInDown"
+          duration={800}
+          style={styles.header}
+        >
+          <View style={styles.crownContainer}>
+            <MaterialIcons
+              name="workspace-premium"
+              size={80}
+              color="#FFD700"
+            />
+          </View>
+          <Text style={styles.title}>{t('subscription.title')}</Text>
+          <Text style={styles.subtitle}>{t('subscription.subtitle')}</Text>
+        </Animatable.View>
+
+        {/* PRICE CARD  ---------------------------------------------- */}
+        <Animatable.View
+          animation="fadeInUp"
+          duration={800}
+          delay={200}
+          style={styles.priceCard}
+        >
+          <View style={styles.trialBadge}>
+            <Text style={styles.trialBadgeText}>
+              {t('subscription.trialInfo')}
+            </Text>
+          </View>
+
+          <Text style={styles.planTitle}>
+            {t('subscription.monthlyPlan')}
+          </Text>
+
+          <View style={styles.priceContainer}>
+            <Text style={styles.price}>
+              {priceInfo.currency}
+              {priceInfo.amount}
+            </Text>
+            <Text style={styles.priceUnit}>
+              /{t('subscription.monthlyPlan').toLowerCase()}
+            </Text>
+          </View>
+
+          <Text style={styles.trialNote}>
+            {t('subscription.trialEnds')}
+          </Text>
+          <Text style={styles.cancelNote}>
+            {t('subscription.cancelAnytime')}
+          </Text>
+        </Animatable.View>
+
+        {/* FEATURES  ------------------------------------------------ */}
+        <Animatable.View
+          animation="fadeInUp"
+          duration={800}
+          delay={400}
+          style={styles.featuresContainer}
+        >
+          <Text style={styles.featuresTitle}>
+            {t('subscription.features.title')}
+          </Text>
+
+          {features.map((feature, index) => (
+            <Animatable.View
+              key={index}
+              animation="fadeInLeft"
+              duration={600}
+              delay={600 + index * 100}
+              style={styles.featureItem}
+            >
+              <View style={styles.featureIcon}>
+                <MaterialIcons
+                  name={feature.icon}
+                  size={24}
+                  color="#667eea"
+                />
+              </View>
+              <Text style={styles.featureText}>{feature.text}</Text>
+            </Animatable.View>
+          ))}
+        </Animatable.View>
+
+        {/* BUTTONS  ------------------------------------------------- */}
+        <Animatable.View
+          animation="fadeInUp"
+          duration={800}
+          delay={1000}
+          style={styles.buttonContainer}
+        >
+          {/* Ücretsiz deneme başlat */}
           <TouchableOpacity
-            style={styles.closeButton}
+            style={styles.trialButton}
+            onPress={handleStartTrial}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.trialButtonText}>
+                {t('subscription.startTrial')}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Satın alımları geri yükle */}
+          <TouchableOpacity
+            style={styles.restoreButton}
+            onPress={() => {}}
+          >
+            <Text style={styles.restoreButtonText}>
+              {t('subscription.restorePurchases')}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Şimdi değil / Ücretsiz devam et */}
+          <TouchableOpacity
+            style={styles.freeButton}
             onPress={handleContinueFree}
           >
-            <MaterialIcons name="close" size={24} color="#fff" />
+            <Text style={styles.freeButtonText}>
+              {t('subscription.notNow')}
+            </Text>
           </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <Animatable.View
-            animation="fadeInDown"
-            duration={800}
-            style={styles.header}
-          >
-            <View style={styles.crownContainer}>
-              <MaterialIcons name="workspace-premium" size={80} color="#FFD700" />
-            </View>
-            <Text style={styles.title}>{t('subscription.title')}</Text>
-            <Text style={styles.subtitle}>{t('subscription.subtitle')}</Text>
-          </Animatable.View>
-
-          {/* Price Card */}
-          <Animatable.View
-            animation="fadeInUp"
-            duration={800}
-            delay={200}
-            style={styles.priceCard}
-          >
-            <View style={styles.trialBadge}>
-              <Text style={styles.trialBadgeText}>{t('subscription.trialInfo')}</Text>
-            </View>
-            
-            <Text style={styles.planTitle}>{t('subscription.monthlyPlan')}</Text>
-          <View style={styles.priceContainer}>
-            <Text style={styles.price}>{priceInfo.currency}{priceInfo.amount}</Text>
-            <Text style={styles.priceUnit}>/{t('subscription.monthlyPlan').toLowerCase()}</Text>
-          </View>
-            
-            <Text style={styles.trialNote}>{t('subscription.trialEnds')}</Text>
-            <Text style={styles.cancelNote}>{t('subscription.cancelAnytime')}</Text>
-          </Animatable.View>
-
-          {/* Features */}
-          <Animatable.View
-            animation="fadeInUp"
-            duration={800}
-            delay={400}
-            style={styles.featuresContainer}
-          >
-            <Text style={styles.featuresTitle}>{t('subscription.features.title')}</Text>
-            {features.map((feature, index) => (
-              <Animatable.View
-                key={index}
-                animation="fadeInLeft"
-                duration={600}
-                delay={600 + index * 100}
-                style={styles.featureItem}
-              >
-                <View style={styles.featureIcon}>
-                  <MaterialIcons name={feature.icon} size={24} color="#667eea" />
-                </View>
-                <Text style={styles.featureText}>{feature.text}</Text>
-              </Animatable.View>
-            ))}
-          </Animatable.View>
-
-          {/* Buttons */}
-          <Animatable.View
-            animation="fadeInUp"
-            duration={800}
-            delay={1000}
-            style={styles.buttonContainer}
-          >
-            <TouchableOpacity
-              style={styles.trialButton}
-              onPress={handleStartTrial}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.trialButtonText}>{t('subscription.startTrial')}</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.restoreButton}
-              onPress={() => {}}
-            >
-              <Text style={styles.restoreButtonText}>{t('subscription.restorePurchases')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.freeButton}
-              onPress={handleContinueFree}
-            >
-              <Text style={styles.freeButtonText}>{t('subscription.notNow')}</Text>
-            </TouchableOpacity>
-          </Animatable.View>
-        </ScrollView>
-      </LinearGradient>
-    </SafeAreaView>
-  );
+        </Animatable.View>
+      </ScrollView>
+    </LinearGradient>
+  </SafeAreaView>
+);
 }
 
 const styles = StyleSheet.create({
@@ -387,4 +419,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textDecorationLine: 'underline',
   },
+   modalOverlay: {
+   flex: 1,
+   backgroundColor: 'rgba(0,0,0,0.4)',
+   justifyContent: 'flex-end',
+ },
+ modalCard: {
+  backgroundColor: '#fff',
+   borderTopLeftRadius: 32,
+   borderTopRightRadius: 32,
+   overflow: 'hidden',
+ },
+ modalHeader: {
+   alignItems: 'center',
+   justifyContent: 'center',
+   paddingVertical: 24,
+ },
+ modalBody: {
+   paddingHorizontal: 24,
+   paddingBottom: 32,
+   alignItems: 'center',
+ },
+ modalTitle: {
+   fontSize: 22,
+   fontWeight: '700',
+   color: '#333',
+   marginBottom: 8,
+   textAlign: 'center',
+ },
+ modalSubtitle: {
+   fontSize: 15,
+   color: '#666',
+   textAlign: 'center',
+   marginBottom: 24,
+
+},
+ modalPrimary: {
+   backgroundColor: '#667eea',
+   borderRadius: 24,
+   width: width * 0.7,
+   alignItems: 'center',
+   paddingVertical: 14,
+   marginBottom: 14,
+ },
+ modalPrimaryText: {
+   color: '#fff',
+   fontSize: 16,
+   fontWeight: '600',
+ },
+ modalSecondaryText: {
+   color: '#667eea',
+   fontSize: 14,
+   textDecorationLine: 'underline',
+ },
 });

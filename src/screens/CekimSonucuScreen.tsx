@@ -308,7 +308,7 @@ export default function CekimSonucuScreen({ route, navigation }: CekimSonucuScre
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={['#f8f9fa', '#ffffff']}
+            colors={['#6B75D6','#46B168']}
             style={styles.analysisGradient}
           >
             {/* Header */}

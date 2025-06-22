@@ -57,7 +57,7 @@ const handleassistantSelect = (nameKey: string) => {
                 style={styles.cardIcon}
               />
             )}
-            <Text style={styles.cardText}>{assistant.name}</Text>
+            <Text style={styles.cardText}>{getAssistantName(assistant.nameKey, t)}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>

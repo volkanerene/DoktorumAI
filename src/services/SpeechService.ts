@@ -76,8 +76,13 @@ class SpeechService {
     }
   }
 
-  isAvailable(): Promise<boolean> {
-    return Voice.isAvailable();
+async isAvailable(): Promise<boolean> {
+    try {
+      const available = await Voice.isAvailable();
+      return available === 1;
+    } catch (error) {
+      return false;
+    }
   }
 
   getIsListening(): boolean {

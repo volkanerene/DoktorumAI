@@ -218,26 +218,7 @@ private analyzeHealthTopics(chatHistory: any[]): string[] {
     });
   }
 
-  public async schedulePersonalizedNotifications(userId: string, messages: any[]) {
-    // cancel any previously‐scheduled personalized job
-    this.cancel(`personalized-${userId}`);
 
-    // pick a time for tomorrow at 9 AM (or whatever makes sense)
-    const date = new Date();
-    date.setDate(date.getDate() + 1);
-    date.setHours(9, 0, 0, 0);
-
-    // you can customize the message using the last chat
-    const last = messages[messages.length - 1]?.text ?? this.t('notifications.genericTip');
-    this.schedule({
-      id: `personalized-${userId}`,
-      title: this.t('notifications.personalizedTitle'),
-      message: this.t('notifications.personalizedMessage').replace('{lastMessage}', last),
-      date,
-      repeatType: 'day',
-      userInfo: { type: 'personalized', userId },
-    });
-  }
 
   cancelAll() {
     if (Platform.OS === 'android' && PushNotificationAndroid) {

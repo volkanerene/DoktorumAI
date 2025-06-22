@@ -1,5 +1,5 @@
 // src/screens/ProfileScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -19,12 +22,19 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageResizer from 'react-native-image-resizer';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
-
-// The questions we want to ask
-const QUESTIONS: string[] = [
+const { width } = Dimensions.get('window');
+const DEFAULT_AVATAR = {
+  male:    'https://www.prokoc2.com/assets/avatars/male.png',
+  female:  'https://www.prokoc2.com/assets/avatars/female.png',
+  other:   'https://www.prokoc2.com/assets/avatars/male.png', // fallback
+} as const;
+// Sağlık anketi soruları
+const QUESTIONS = [
+  /* ... aynı liste ... */
   "Günde kaç saat uyuyorsunuz?",
   "Günde ne kadar su içiyorsunuz?",
   "Haftada kaç saat egzersiz yapıyorsunuz?",
@@ -47,435 +57,319 @@ const QUESTIONS: string[] = [
   "Cilt bakım rutini uyguluyor musunuz?",
 ];
 
-type ProfileScreenProps = StackScreenProps<RootStackParamList, 'Profile'>;
+type Props = StackScreenProps<RootStackParamList, 'Profile'>;
 
-export default function ProfileScreen({ route, navigation }: ProfileScreenProps) {
+export default function ProfileScreen({ route, navigation }: Props) {
   const { userId } = route.params;
   const { t, language, setLanguage } = useLanguage();
-  // For profile photo URL
-  const [profilePhoto, setProfilePhoto] = useState<string>('');
-  // For question answers
+
+  const [profilePhoto, setProfilePhoto] = useState('');
   const [answers, setAnswers] = useState<string[]>(Array(QUESTIONS.length).fill(''));
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
+
+  // basit fade animasyonu
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      setLoading(true);
-      try {
-        const res = await axios.get(`${SERVER_URL}?action=getProfile&user_id=${userId}`);
-        if (res.data && res.data.success && res.data.profile) {
-          const { profile_photo, answers: storedAnswers } = res.data.profile;
-          setProfilePhoto(profile_photo || '');
-          if (storedAnswers && Array.isArray(storedAnswers)) {
-            setAnswers(storedAnswers);
-          }
-        }
-      } catch (err) {
-        console.log("Error fetching profile:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
     fetchProfile();
-  }, [userId]);
+  }, []);
 
-  // Save the profile to server
+  /* -------- API -------- */
+  const fetchProfile = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${SERVER_URL}?action=getProfile&user_id=${userId}`);
+      if (res.data?.success) {
+      const g = res.data.profile?.gender || 'other';
+      const url = res.data.profile?.profile_photo
+                  ? res.data.profile.profile_photo
+                  : DEFAULT_AVATAR[g];
+      setProfilePhoto(url);
+        if (Array.isArray(res.data.profile?.answers)) setAnswers(res.data.profile.answers);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     try {
       setLoading(true);
-      const payload = {
-        user_id: userId,
-        profile_photo: profilePhoto,
-        answers,
-      };
+      const payload = { user_id: userId, profile_photo: profilePhoto, answers };
       const res = await axios.post(`${SERVER_URL}?action=saveProfile`, payload);
-      if (res.data?.success) {
-        Alert.alert("Başarılı", "Profiliniz kaydedildi!");
-      } else {
-        Alert.alert("Hata", res.data?.error || "Bilinmeyen hata.");
-      }
-    } catch (error) {
-      Alert.alert("Hata", "Profil kaydedilirken bir hata oluştu.");
+      res.data?.success
+        ? Alert.alert(t('common.success'), t('profile.saved'))
+        : Alert.alert(t('common.error'), res.data.error || 'Error');
+    } catch {
+      Alert.alert(t('common.error'), t('profile.saveError'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleChangePhoto = async () => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      includeBase64: false,
-    });
-  
-    if (result.didCancel) {
-      console.log("Kullanıcı fotoğraf seçmeyi iptal etti.");
-      return;
+    const result = await launchImageLibrary({ mediaType: 'photo' });
+    if (result.didCancel || !result.assets?.length) return;
+    const asset = result.assets[0];
+    if (!asset.uri) return;
+
+    try {
+      const resized = await ImageResizer.createResizedImage(asset.uri, 800, 800, 'JPEG', 70);
+      const formData = new FormData();
+      formData.append('photo', {
+        uri: resized.uri,
+        name: asset.fileName || `photo_${Date.now()}.jpg`,
+        type: asset.type || 'image/jpeg',
+      });
+      formData.append('user_id', String(userId));
+      setLoading(true);
+      const res = await axios.post(`${SERVER_URL}?action=uploadProfilePhoto`, formData);
+      if (res.data.success) {
+        setProfilePhoto(res.data.url);
+        Alert.alert(t('common.success'), t('profile.photoUploaded'));
+      } else {
+        Alert.alert(t('common.error'), res.data.error || 'Upload error');
+      }
+    } catch {
+      Alert.alert(t('common.error'), t('profile.photoError'));
+    } finally {
+      setLoading(false);
     }
-  
-    if (result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      if (asset.uri) {
-        console.log("Selected asset details:", asset);
-        
-        try {
-          // Resize the image to a maximum width or height of 800px and set quality to 70%
-          const resizedImage = await ImageResizer.createResizedImage(
-            asset.uri,
-            800, // max width
-            800, // max height
-            'JPEG',
-            70,  // quality percentage
-            0    // rotation (0 means no rotation)
-          );
-  
-          console.log("Resized image details:", resizedImage);
-  
-          const formData = new FormData();
-          formData.append('photo', {
-            uri: resizedImage.uri,
-            name: asset.fileName || `photo_${Date.now()}.jpg`,
-            type: asset.type || 'image/jpeg',
-          });
-          formData.append('user_id', String(userId)); // Ensure user_id is a string
-  
+  };
+
+  const handleLanguageChange = async (lang: 'tr' | 'en') => {
+    await setLanguage(lang);
+    Alert.alert(t('common.success'), t('profile.languageChanged'));
+  };
+
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('userData');
+    navigation.reset({ index: 0, routes: [{ name: 'First' }] });
+  };
+
+  const handleDeleteAccount = async () => {
+    Alert.alert(t('profile.deleteTitle'), t('profile.deleteConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
           try {
-            setLoading(true);
-            const res = await axios.post(`${SERVER_URL}?action=uploadProfilePhoto`, formData);
-            console.log("Upload response:", res.data);
+            const res = await axios.post(`${SERVER_URL}?action=deleteAccount`, { user_id: userId });
             if (res.data.success) {
-              setProfilePhoto(res.data.url);
-              Alert.alert("Başarılı", "Fotoğraf başarıyla yüklendi.");
-            } else {
-              Alert.alert(
-                "Hata",
-                `Fotoğraf yükleme başarısız.\nServer Error: ${res.data.error || "No error message."}\nDebug: ${JSON.stringify(res.data.debug)}`
-              );
-            }
-          } catch (error: any) {
-            console.error("Error uploading photo:", error);
-            if (error.response) {
-              Alert.alert(
-                "Hata",
-                `Fotoğraf yüklenirken hata oluştu.\nStatus: ${error.response.status}\nData: ${JSON.stringify(error.response.data)}`
-              );
-            } else {
-              Alert.alert("Hata", `Fotoğraf yüklenirken hata oluştu: ${error.message}`);
-            }
+              await AsyncStorage.removeItem('userData');
+              Alert.alert(t('common.success'), t('profile.deleted'));
+              navigation.reset({ index: 0, routes: [{ name: 'First' }] });
+            } else Alert.alert(t('common.error'), res.data.error || 'Err');
           } finally {
             setLoading(false);
           }
-        } catch (resizeError) {
-          console.error("Image resizing error:", resizeError);
-          Alert.alert("Hata", "Fotoğraf küçültme işlemi başarısız.");
-        }
-      } else {
-        Alert.alert("Hata", "Fotoğraf URI bulunamadı.");
-      }
-    } else {
-      Alert.alert("Hata", "Fotoğraf seçilemedi.");
-    }
-  };
-const handleLanguageChange = async (lang: 'tr' | 'en') => {
-  await setLanguage(lang);
-  Alert.alert(t('common.success'), t('profile.languageChanged'));
-};
-  const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem('userData');
-      Alert.alert('Çıkış yapıldı.');
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'First' }],
-      });
-    } catch (error) {
-      Alert.alert('Hata', 'Çıkış yapılamadı.');
-    }
-  };
-  // Mevcut handleLogout fonksiyonun hemen altına ekle:
-  const handleDeleteAccount = async () => {
-    Alert.alert(
-      'Hesabı Sil',
-      'Hesabınızı kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              const res = await axios.post(
-                `${SERVER_URL}?action=deleteAccount`,
-                { user_id: userId }
-              );
-              if (res.data.success) {
-                await AsyncStorage.removeItem('userData');
-                Alert.alert('Başarılı', 'Hesabınız silindi.');
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'First' }],
-                });
-              } else {
-                Alert.alert('Hata', res.data.error || 'Silme işlemi başarısız.');
-              }
-            } catch (err: any) {
-              Alert.alert('Hata', `Sunucu hatası: ${err.message}`);
-            } finally {
-              setLoading(false);
-            }
-          },
         },
-      ]
-    );
-  };
-  // Renders each question with a TextInput
-  const renderQuestion = (q: string, index: number) => {
-    return (
-      <View key={index} style={styles.questionContainer}>
-        <Text style={styles.question}>{q}</Text>
-        <TextInput
-          style={styles.answerInput}
-          placeholder="Cevabınız..."
-          placeholderTextColor="#888"
-          value={answers[index]}
-          onChangeText={(text) => {
-            const newAnswers = [...answers];
-            newAnswers[index] = text;
-            setAnswers(newAnswers);
-          }}
-        />
-      </View>
-    );
+      },
+    ]);
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
+  /* -------- Render Helpers -------- */
+  const renderQuestion = (q: string, idx: number) => (
+    <View key={idx} style={styles.qItem}>
+      <Text style={styles.qText}>{q}</Text>
+      <TextInput
+        style={styles.qInput}
+        placeholder={t('profile.answerPlaceholder')}
+        placeholderTextColor="#888"
+        value={answers[idx]}
+        onChangeText={(txt) => {
+          const arr = [...answers];
+          arr[idx] = txt;
+          setAnswers(arr);
+        }}
+      />
+    </View>
+  );
 
+
+
+  /* -------------------- UI -------------------- */
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header with back button and title */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profilim</Text>
-        {/* Placeholder view for alignment */}
-        <View style={{ width: 24 }} />
-      </View>
-      <ScrollView style={styles.content}>
-        <View style={styles.profilePhotoContainer}>
-          {profilePhoto ? (
-            <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
-          ) : (
-            <Image
-              source={{ uri: 'https://via.placeholder.com/200/000/fff?text=Photo' }}
-              style={styles.profilePhoto}
-            />
-          )}
-          <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
-            <Text style={styles.changePhotoText}>Fotoğrafı Değiştir</Text>
+    <LinearGradient colors={['#667eea', '#764ba2', '#f093fb']} style={styles.container}>
+        {/*  ➕  yükleniyor overlay */}
+  {loading && (
+    <View style={styles.loadingOverlay}>
+      <ActivityIndicator size="large" color="#fff" />
+    </View>
+  )}
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          {/* Logout button below the photo change button */}
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Text style={styles.logoutButtonText}>Çıkış Yap</Text>
-          </TouchableOpacity>
-          <View style={styles.languageSection}>
-  <Text style={styles.sectionTitle}>{t('profile.language')}</Text>
-  <View style={styles.languageButtons}>
-    <TouchableOpacity
-      style={[
-        styles.languageButton,
-        language === 'tr' && styles.languageButtonActive
-      ]}
-      onPress={() => handleLanguageChange('tr')}
-    >
-      <Text style={[
-        styles.languageButtonText,
-        language === 'tr' && styles.languageButtonTextActive
-      ]}>
-        {t('profile.turkish')}
-      </Text>
-    </TouchableOpacity>
-    <TouchableOpacity
-      style={[
-        styles.languageButton,
-        language === 'en' && styles.languageButtonActive
-      ]}
-      onPress={() => handleLanguageChange('en')}
-    >
-      <Text style={[
-        styles.languageButtonText,
-        language === 'en' && styles.languageButtonTextActive
-      ]}>
-        {t('profile.english')}
-      </Text>
-    </TouchableOpacity>
-  </View>
-</View>
-        <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
-          <MaterialIcons name="delete-forever" size={20} color="#FF3B30" />
-          <Text style={styles.deleteAccountText}>Hesabı Sil</Text>
-        </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('profile.myProfile')}</Text>
+          <View style={{ width: 32 }} />
         </View>
 
-        <View style={styles.questionsList}>
-          {QUESTIONS.map((q, i) => renderQuestion(q, i))}
-        </View>
+        <Animated.ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          style={{ opacity: fadeAnim }}
+        >
+          {/* Card */}
+          <View style={styles.card}>
+            {/* Photo */}
+            <TouchableOpacity onPress={handleChangePhoto} style={styles.photoWrapper}>
+              <Image
+                source={{
+                  uri: profilePhoto || 'https://via.placeholder.com/200/eee/667eea?text=👤',
+                }}
+                style={styles.photo}
+              />
+              <View style={styles.cameraBadge}>
+                <MaterialIcons name="photo-camera" size={18} color="#000" />
+              </View>
+            </TouchableOpacity>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile}>
-          <Text style={styles.saveButtonText}>Kaydet</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+            {/* Dil seçimi */}
+            <Text style={styles.sectionTitle}>{t('profile.language')}</Text>
+            <View style={styles.langRow}>
+              <TouchableOpacity
+                style={[styles.langBtn, language === 'tr' && styles.langActive]}
+                onPress={() => handleLanguageChange('tr')}
+              >
+                <Text style={[styles.langTxt, language === 'tr' && styles.langTxtActive]}>
+                  {t('profile.turkish')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.langBtn, language === 'en' && styles.langActive]}
+                onPress={() => handleLanguageChange('en')}
+              >
+                <Text style={[styles.langTxt, language === 'en' && styles.langTxtActive]}>
+                  {t('profile.english')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Sorular */}
+            <Text style={styles.sectionTitle}>{t('profile.healthSurvey')}</Text>
+            {QUESTIONS.map(renderQuestion)}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProfile}>
+              <Text style={styles.saveTxt}>{t('common.save')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+              <Text style={styles.logoutTxt}>{t('profile.logout')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount}>
+              <MaterialIcons name="delete-forever" size={20} color="#FF3B30" />
+              <Text style={styles.deleteTxt}>{t('profile.deleteAccount')}</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
+/* -------------------- STYLES -------------------- */
+const CARD_PADDING = 24;
+
 const styles = StyleSheet.create({
-  languageSection: {
-  marginVertical: 20,
-  paddingHorizontal: 20,
-},
-sectionTitle: {
-  color: '#fff',
-  fontSize: 18,
-  fontWeight: '600',
-  marginBottom: 12,
-},
-languageButtons: {
-  flexDirection: 'row',
-  gap: 12,
-},
-languageButton: {
-  flex: 1,
-  backgroundColor: '#222',
-  paddingVertical: 12,
-  borderRadius: 8,
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: '#333',
-},
-languageButtonActive: {
-  backgroundColor: '#C8FF00',
-  borderColor: '#C8FF00',
-},
-languageButtonText: {
-  color: '#fff',
-  fontSize: 16,
-  fontWeight: '500',
-},
-languageButtonTextActive: {
-  color: '#000',
-},
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
+  container: { flex: 1 },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  /* Header */
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, marginBottom: 10 },
+  backBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 20, color: '#fff', fontWeight: 'bold' },
+
+  /* Scroll */
+  scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+
+  /* Card */
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 30,
+    padding: CARD_PADDING,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  header: {
+
+  photoWrapper: { alignSelf: 'center', marginBottom: 20 },
+  photo: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#ddd' },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#C8FF00',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+
+  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 12 },
+
+  /* Language */
+  langRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  langBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+  },
+  langActive: { backgroundColor: '#C8FF00', borderColor: '#C8FF00' },
+  langTxt: { fontSize: 15, color: '#333', fontWeight: '500' },
+  langTxtActive: { color: '#000' },
+
+  /* Q&A */
+  qItem: { marginBottom: 16 },
+  qText: { fontSize: 15, color: '#333', marginBottom: 4 },
+  qInput: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    fontSize: 15,
+    color: '#000',
+  },
+
+  /* Buttons */
+  saveBtn: { backgroundColor: '#27ae60', borderRadius: 25, paddingVertical: 14, alignItems: 'center', marginTop: 10 },
+  saveTxt: { color: '#fff', fontSize: 16, fontWeight: '600' },
+
+  logoutBtn: { backgroundColor: '#E53935', borderRadius: 25, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
+  logoutTxt: { color: '#fff', fontSize: 16, fontWeight: '600' },
+
+  deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-    justifyContent: 'space-between',
-  },  
-  deleteAccountButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#FF3B30',
     borderRadius: 25,
     paddingVertical: 14,
-    paddingHorizontal: 20,
-    marginTop: 20,
-    marginHorizontal: 20,
+    marginTop: 16,
   },
-  deleteAccountText: {
-    color: '#FF3B30',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  backButton: {
-    fontSize: 24,
-    color: '#fff',
-    width: 24,
-  },
-  headerTitle: {
-    fontSize: 20,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  profilePhotoContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  profilePhoto: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    resizeMode: 'cover',
-    backgroundColor: '#222',
-  },
-  changePhotoButton: {
-    marginTop: 10,
-    backgroundColor: '#444',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  changePhotoText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  logoutButton: {
-    marginTop: 10,
-    backgroundColor: '#C00',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  questionsList: {
-    marginBottom: 20,
-  },
-  questionContainer: {
-    marginBottom: 15,
-  },
-  question: {
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  answerInput: {
-    backgroundColor: '#222',
-    color: '#fff',
-    padding: 8,
-    borderRadius: 6,
-  },
-  saveButton: {
-    backgroundColor: '#27ae60',
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginBottom: 40,
-  },
-  saveButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+  deleteTxt: { color: '#FF3B30', fontSize: 16, fontWeight: '600', marginLeft: 6 },
+  loadingOverlay: {
+  ...StyleSheet.absoluteFillObject,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0,0,0,0.35)',
+  zIndex: 100,
+},
 });

@@ -20,6 +20,8 @@ import PasswordResetScreen from './screens/PasswordResetScreen';
 import EmergencySOSScreen from './screens/EmergencySOSScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
+import HealthTrackingScreen from './screens/HealthTrackingScreen';
+import MedicationReminderScreen from './screens/MedicationReminderScreen';
 
 export type RootStackParamList = {
   AuthLoading: undefined;
@@ -40,6 +42,7 @@ export type RootStackParamList = {
   Subscription: { userId: string; userName: string };
   HealthTracking: { userId: string; userName: string };
   MedicationReminder: { userId: string; userName: string };
+  MedicationDetail: { medication: any };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -62,6 +65,10 @@ export default function AppNavigation() {
         <Stack.Screen name="History" component={HistoryScreen} />
         <Stack.Screen name="NobetciEczaneler" component={NobetciEczanelerScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        <Stack.Screen name="Subscription" component={SubscriptionScreen} />
+        <Stack.Screen name="HealthTracking" component={HealthTrackingScreen} />
+        <Stack.Screen name="MedicationReminder" component={MedicationReminderScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

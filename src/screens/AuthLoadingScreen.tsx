@@ -21,48 +21,34 @@ export default function AuthLoadingScreen({ navigation }: AuthLoadingScreenProps
             const subscriptionShown = await AsyncStorage.getItem(`subscription_shown_${data.userId}`);
             
             if (!subscriptionShown) {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Subscription', params: { userId: data.userId, userName: data.userName } }],
-              });
+              navigation.replace('Subscription', { userId: data.userId, userName: data.userName });
             } else {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Home', params: { userId: data.userId, userName: data.userName } }],
-              });
+              navigation.replace('Home', { userId: data.userId, userName: data.userName });
             }
             return;
           }
+          
           // Check if onboarding is completed
-      const onboardingCompleted = await AsyncStorage.getItem(`onboarding_completed_${data.userId}`);
-      
-      if (!onboardingCompleted) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Onboarding', params: { userId: data.userId, userName: data.userName } }],
-        });
-      } else {
-        const subscriptionShown = await AsyncStorage.getItem(`subscription_shown_${data.userId}`);
-        
-        if (!subscriptionShown) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Subscription', params: { userId: data.userId, userName: data.userName } }],
-          });
+          const onboardingCompleted = await AsyncStorage.getItem(`onboarding_completed_${data.userId}`);
+          
+          if (!onboardingCompleted) {
+            navigation.replace('Onboarding', { userId: data.userId, userName: data.userName });
+          } else {
+            const subscriptionShown = await AsyncStorage.getItem(`subscription_shown_${data.userId}`);
+            
+            if (!subscriptionShown) {
+              navigation.replace('Subscription', { userId: data.userId, userName: data.userName });
+            } else {
+              navigation.replace('Home', { userId: data.userId, userName: data.userName });
+            }
+          }
         } else {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Home', params: { userId: data.userId, userName: data.userName } }],
-          });
+          navigation.replace('First');
         }
+      } catch (error) {
+        navigation.replace('First');
       }
-    } else {
-      navigation.replace('First');
-    }
-  } catch (error) {
-    navigation.replace('First');
-  }
-};
+    };
     checkLogin();
   }, [navigation]);
 

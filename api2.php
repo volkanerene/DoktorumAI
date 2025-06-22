@@ -14,9 +14,9 @@ function debugLog($message) {
 
 // Database config
 $servername = "localhost";
-$username   = "prokocco_pro5User";
-$password   = "leBronjames5!";
-$dbname     = "prokocco_pro5";
+$username   = "prokocco_saglikasistanim";
+$password   = "PGyjzZZdYBvtaRWwHYJg";
+$dbname     = "prokocco_saglikasistanim";
 
 $conn = new mysqli($servername, $username, $password, $dbname);
 $conn->set_charset("utf8mb4");
@@ -357,7 +357,33 @@ function analyzeUserHealthTopics($userId) {
     return array_unique($topics);
 }
 
+/**
+ * Locale-duyarlı basit mail başlığı ve metin üretir
+ */
+function buildResetMail($email, $token, $lang = 'tr'): array {
+    $baseUrl = 'https://www.prokoc2.com/reset?token=' . urlencode($token);
+    if ($lang === 'en') {
+        $subject = 'Password Reset Request';
+        $body = "Hello,\n\n"
+              . "We received a request to reset your password. "
+              . "If you made this request, click the link below within 30 minutes:\n\n"
+              . "$baseUrl\n\n"
+              . "If you didn't request a reset, please ignore this email.";
+    } else { // default TR
+        $subject = 'Şifre Sıfırlama Talebi';
+        $body = "Merhaba,\n\n"
+              . "Hesabınız için bir şifre sıfırlama isteği aldık. "
+              . "Eğer bu isteği siz yaptıysanız 30 dakika içinde aşağıdaki bağlantıya tıklayın:\n\n"
+              . "$baseUrl\n\n"
+              . "Bu işlemi siz yapmadıysanız lütfen e-postayı dikkate almayın.";
+    }
+    return [$subject, $body];
+}
 
+/** 64‐byte random token döndürür */
+function generateToken(): string {
+    return bin2hex(random_bytes(32)); // 64 karakter
+}
 
 // sendMessage action'ına bildirim planlama ekle
 function getTurkishSystemPrompt() {
@@ -665,7 +691,7 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
             $token    = isset($input['token']) ? trim($input['token']) : '';
             $name     = isset($input['name']) ? trim($input['name'])  : '';
             $email    = isset($input['email']) ? trim($input['email']) : '';
-$language = isset($input['language']) ? $input['language'] : 'tr';
+            $language = isset($input['language']) ? $input['language'] : 'tr';
             if (!$provider || !$token) {
                 handleError("provider and token required.");
             }
@@ -697,11 +723,8 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
                     $socialEmail = $verifiedEmail;
 
                 } else if ($provider === 'apple') {
-                    $appleSub = isset($input['user_id']) ? trim($input['user_id']) : '';
-                    
-                    if (!$appleSub) {
-                        handleError("Apple user_id required.");
-                    }
+                    $appleSub = $input['user_id'] ?? $input['sub'] ?? '';
+                    if (!$appleSub) handleError("Apple user_id required.");
 
                     $socialSub = $appleSub;
                     $socialEmail = $email ?: $socialSub.'@privaterelay.appleid.com';
@@ -760,37 +783,79 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
                 handleError("loginSocial error: " . $e->getMessage());
             }
 
-        // Forgot password
-        case 'forgotPassword':
-            $input = json_decode(file_get_contents('php://input'), true);
-            if (!isset($input['email'])) handleError("email required");
-            $email = trim($input['email']);
-$language = isset($input['language']) ? $input['language'] : 'tr';
-            $stmt = $conn->prepare("SELECT id FROM users3 WHERE email = ? LIMIT 1");
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res->num_rows === 0) handleError("Email not registered");
+// Forgot password – send mail with reset link
+case 'forgotPassword':
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    if (empty($input['email'])) handleError("email required");
+    $email = trim($input['email']);
+    $lang  = $input['language'] ?? 'tr';
 
-            $token = bin2hex(random_bytes(16));
-            $expires = date('Y-m-d H:i:s', strtotime('+30 minutes'));
+    // Kullanıcı var mı?
+    $stmt = $conn->prepare("SELECT id FROM users3 WHERE email = ? LIMIT 1");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res->num_rows === 0) handleError("Email not registered");
 
-            $conn->query("CREATE TABLE IF NOT EXISTS reset_tokens (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                email VARCHAR(255),
-                token VARCHAR(64),
-                expires DATETIME)");
+    // Token üret + DB’ye hash olarak ekle
+    $token   = generateToken();
+    $tokenHash = hash('sha256', $token);
+    $expires = date('Y-m-d H:i:s', strtotime('+30 minutes'));
 
-            $ins = $conn->prepare("INSERT INTO reset_tokens(email, token, expires) VALUES(?,?,?)");
-            $ins->bind_param("sss", $email, $token, $expires);
-            $ins->execute();
-            $ins->close();
+    // Eski token'ları temizle (isteğe bağlı)
+    $del = $conn->prepare("DELETE FROM reset_tokens WHERE email = ? OR expires < NOW()");
+    $del->bind_param("s", $email);
+    $del->execute();
 
-            mail($email, "Password Reset", "Click within 30 minutes:\nhttps://www.prokoc2.com/reset?token=$token");
+    $ins = $conn->prepare("INSERT INTO reset_tokens(email, token_hash, expires) VALUES(?,?,?)");
+    $ins->bind_param("sss", $email, $tokenHash, $expires);
+    $ins->execute();
 
-            echo json_encode(["success"=>true, "message"=>"Email sent"]);
-            exit;
+    // Mail gönder
+    [$subject, $body] = buildResetMail($email, $token, $lang);
+    $headers = "From: DoktorumAI <no-reply@prokoc2.com>\r\nContent-Type: text/plain; charset=UTF-8";
+    if (!mail($email, $subject, $body, $headers)) {
+        handleError("Mail failed");
+    }
 
+    echo json_encode(["success" => true, "message" => "Email sent"]);
+    exit;
+
+    // Reset password – verify token + set new password
+case 'resetPassword':
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    if (empty($input['token']) || empty($input['newPassword']))
+        handleError("token and newPassword required");
+
+    $token      = $input['token'];
+    $tokenHash  = hash('sha256', $token);
+    $newPassRaw = $input['newPassword'];
+
+    // Token doğrula
+    $stmt = $conn->prepare(
+        "SELECT email FROM reset_tokens WHERE token_hash = ? AND expires >= NOW() LIMIT 1"
+    );
+    $stmt->bind_param("s", $tokenHash);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res->num_rows === 0) handleError("Invalid or expired token");
+
+    $row   = $res->fetch_assoc();
+    $email = $row['email'];
+
+    // Kullanıcının şifresini güncelle (bcrypt)
+    $hash = password_hash($newPassRaw, PASSWORD_BCRYPT);
+    $upd  = $conn->prepare("UPDATE users3 SET password = ? WHERE email = ? LIMIT 1");
+    $upd->bind_param("ss", $hash, $email);
+    $upd->execute();
+
+    // Token’ı sil
+    $del = $conn->prepare("DELETE FROM reset_tokens WHERE token_hash = ?");
+    $del->bind_param("s", $tokenHash);
+    $del->execute();
+
+    echo json_encode(["success" => true, "message" => "Password updated"]);
+    exit;
         // Analyze MRI/X-Ray
         case 'analyzeCekim':
             debugLog("analyzeCekim route invoked");

@@ -2,6 +2,7 @@ export const translations = {
   tr: {
     // Common
     common: {
+       guest: 'Misafir',
       cancel: 'İptal',
       save: 'Kaydet',  
       delete: 'Sil',
@@ -34,6 +35,21 @@ export const translations = {
     
     // Auth screens
     auth: {
+      resetTitle: 'Parolayı Sıfırla',
+      resetSubtitle: 'E-postanızı girerek sıfırlama kodunuzu alabilirsiniz',
+      signup: 'Kayıt Ol',
+      login: 'Giriş Yap',
+            /* Header alt başlık */
+      createAccount: 'Hesabını Oluştur',
+      /* Şartlar onayı satırı */
+      agreeTerms: 'Okudum, anladım ve',
+      readTerms: 'Hizmet Şartları\'nı',
+      /* Modal başlığı */
+      termsTitle: 'Hizmet Şartları',
+      /* Sosyal kayıt ayırıcı */
+      orSignupWith: 'Başka Türlü Kayıt Ol',
+      /* Login linki */
+      haveAccount: 'Hesabın var mı?',
       loginTitle: 'Giriş Yap',
       signupTitle: 'Hesabını Oluştur',
       email: 'Email',
@@ -108,6 +124,7 @@ export const translations = {
         allDoctors: 'Tüm uzmanlık alanları',
         priority: 'Öncelikli destek',
         notifications: 'Akıllı hatırlatmalar',
+        title: 'Özellikler'
       },
       startTrial: 'Ücretsiz Denemeyi Başlat',
       restorePurchases: 'Satın Alımları Geri Yükle',
@@ -125,7 +142,9 @@ export const translations = {
         afternoon: 'İyi günler',
         evening: 'İyi akşamlar',
       },
-      
+      goodAfternoon: 'İyi Öğlenler',
+      freePlan: 'Ücretsiz Plan',
+      all: 'Tümü',   
       healthScore: 'Sağlık Puanınız',
       goodHealth: 'İyi durumdasınız',
       quickActions: 'Hızlı İşlemler',
@@ -194,6 +213,14 @@ export const translations = {
     
     // Profile
     profile: {
+        myProfile: 'Profilim',       // Header başlığı
+  healthSurvey: 'Sağlık Anketi',
+  answerPlaceholder: 'Cevabınız...',
+  saved: 'Profil kaydedildi',
+  saveError: 'Profil kaydedilirken hata',
+  deleted: 'Hesap silindi',
+  deleteTitle: 'Hesabı Sil',
+  deleteConfirm: 'Hesabınızı kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
       title: 'Profilim',
       changePhoto: 'Fotoğrafı Değiştir',
       deleteAccount: 'Hesabı Sil',
@@ -429,6 +456,7 @@ export const translations = {
   en: {
     // Common
     common: {
+      guest: 'Guest',
       cancel: 'Cancel',
       save: 'Save',
       delete: 'Delete',
@@ -461,6 +489,16 @@ export const translations = {
     
     // Auth screens
     auth: {
+      resetTitle: 'Reset Password',
+      resetSubtitle: 'You can get your reset code with entering your email',
+      signup: 'Sign Up',
+      login: 'Login',
+            createAccount: 'Create Your Account',
+      agreeTerms: 'I have read and accept the',
+      readTerms: 'Terms of Service',
+      termsTitle: 'Terms of Service',
+      orSignupWith: 'Or sign up with',
+      haveAccount: 'Have an account?',
       loginTitle: 'Login',
       signupTitle: 'Create Account',
       email: 'Email',
@@ -535,6 +573,7 @@ export const translations = {
         allDoctors: 'All specialties',
         priority: 'Priority support',
         notifications: 'Smart reminders',
+        title: 'Features'
       },
       startTrial: 'Start Free Trial',
       restorePurchases: 'Restore Purchases',
@@ -552,6 +591,9 @@ export const translations = {
         afternoon: 'Good afternoon',
         evening: 'Good evening',
       },
+      goodAfternoon: 'Good Afternoon',
+      freePlan: 'Free Plan',
+      all: 'All',                  // “Recent Chats → All” button
       healthScore: 'Your Health Score',
       goodHealth: 'You\'re in good health',
       quickActions: 'Quick Actions',
@@ -620,6 +662,14 @@ export const translations = {
     
     // Profile
     profile: {
+        myProfile: 'My Profile',
+  healthSurvey: 'Health Survey',
+  answerPlaceholder: 'Your answer...',
+  saved: 'Profile saved',
+  saveError: 'Error saving profile',
+  deleted: 'Account deleted',
+  deleteTitle: 'Delete Account',
+  deleteConfirm: 'Are you sure you want to permanently delete your account? This cannot be undone.',
       title: 'My Profile',
       changePhoto: 'Change Photo',
       deleteAccount: 'Delete Account',

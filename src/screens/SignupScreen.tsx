@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,28 +12,32 @@ import {
   Modal,
   ScrollView,
   Platform,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { GoogleSignin, statusCodes, isSuccessResponse } from '@react-native-google-signin/google-signin';
-import { appleAuth, AppleButton } from '@invertase/react-native-apple-authentication';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import {
+  GoogleSignin,
+  statusCodes,
+  isSuccessResponse,
+} from '@react-native-google-signin/google-signin';
+import { appleAuth } from '@invertase/react-native-apple-authentication';
+import SHA256 from 'crypto-js/sha256';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
 
 type SignupScreenProps = StackScreenProps<RootStackParamList, 'Signup'>;
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
-
-interface GoogleSignInResponse {
-  idToken: string;
-  user: {
-    email: string;
-    name: string;
-    // Diğer gerekli alanlar eklenebilir
-  };
-}
+const { width: W, height: H } = Dimensions.get('window');
 
 export default function SignupScreen({ navigation }: SignupScreenProps) {
   const [name, setName] = useState('');
@@ -40,526 +46,586 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
   const [showPass, setShowPass] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { t, language } = useLanguage();
 
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const float1 = useRef(new Animated.Value(0)).current;
+  const float2 = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
+    StatusBar.setBarStyle('light-content');
     GoogleSignin.configure({
       webClientId:
         '100126624381-4bu382pfb9p58o67b29adubjesa3ib62.apps.googleusercontent.com',
-        iosClientId: '100126624381-4bu382pfb9p58o67b29adubjesa3ib62.apps.googleusercontent.com', // Replace with your actual iOS client ID
-      });
+      iosClientId:
+        '100126624381-4bu382pfb9p58o67b29adubjesa3ib62.apps.googleusercontent.com',
+    });
+
+    startAnimations();
   }, []);
 
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.15,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(float1, {
+          toValue: -20,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(float1, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(float2, {
+          toValue: 20,
+          duration: 3500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(float2, {
+          toValue: 0,
+          duration: 3500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* -------------------------   API HANDLERS  ------------------------ */
+  /* ------------------------------------------------------------------ */
+
   const handleSignup = async () => {
-    if (!email || !password) {
-      Alert.alert('Hata', 'Email ve şifre gereklidir.');
+    if (!name || !email || !password) {
+      Alert.alert(
+        t('common.error'),
+        `${t('auth.nameRequired')}, ${t('auth.emailRequired')}, ${t('auth.passwordRequired')}`,
+      );
       return;
     }
     if (!termsAccepted) {
-      Alert.alert('Hata', 'Kayıt olabilmek için şartları kabul etmelisiniz.');
+      Alert.alert(t('common.error'), t('auth.termsRequired'));
       return;
     }
+
+    setLoading(true);
     try {
       const response = await axios.post(`${SERVER_URL}?action=signup`, {
         name,
         email,
         password,
+        language,
       });
+
       if (response.data.success) {
-        Alert.alert('Başarılı', 'Kayıt oldunuz, şimdi giriş yapabilirsiniz.');
+        Alert.alert(t('common.success'), t('auth.signupSuccess'));
         navigation.goBack();
       } else {
-        Alert.alert('Hata', response.data.error || 'Kayıt başarısız');
+        Alert.alert(t('common.error'), response.data.error || t('auth.signupError'));
       }
-    } catch (error) {
-      Alert.alert('Hata', 'Sunucuya bağlanılamadı.');
+    } catch {
+      Alert.alert(t('common.error'), t('auth.serverError'));
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ----- GUEST LOGIN -----
   const handleGuestLogin = async () => {
+    setLoading(true);
     try {
       const guestId = 'guest_' + Date.now();
-      const guestName = 'Misafir Kullanıcı';
-      
-      // Save guest data to AsyncStorage
+      const guestName = t('common.guest');
+
       await AsyncStorage.setItem(
         'userData',
-        JSON.stringify({ userId: guestId, userName: guestName, userType: 'guest' })
+        JSON.stringify({ userId: guestId, userName: guestName, userType: 'guest' }),
       );
-      
-      Alert.alert('Başarılı', 'Misafir olarak giriş yapıldı.');
+
+      Alert.alert(t('common.success'), t('auth.guestSuccess'));
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Home', params: { userId: guestId, userName: guestName, userType: 'guest' } }],
+        routes: [{ name: 'Home', params: { userId: guestId, userName: guestName } }],
       });
-    } catch (error) {
-      Alert.alert('Hata', 'Misafir girişi başarısız.');
+    } catch {
+      Alert.alert(t('common.error'), t('auth.guestError'));
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleGoogleSignup = async () => {
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      await GoogleSignin.hasPlayServices();
       const res = await GoogleSignin.signIn();
-  
-      if (!isSuccessResponse(res)) return;      // user cancelled
-  
+
+      if (!isSuccessResponse(res)) return;
+
       let { idToken, user } = res.data;
       if (!idToken) idToken = (await GoogleSignin.getTokens()).idToken;
-  
+
       if (!idToken) {
-        Alert.alert('Hata', 'Google kimliği alınamadı.');
+        Alert.alert(t('common.error'), 'Google ID token error');
         return;
       }
+
       const payload = {
         provider: 'google',
         token: idToken,
-        name: user.name ?? '',
-        email: user.email ?? '',
+        name: user.name || '',
+        email: user.email || '',
+        language,
       };
+
       const apiRes = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
+
       if (apiRes.data.success) {
-        // Save user data for persistent login
         await AsyncStorage.setItem(
           'userData',
-          JSON.stringify({ userId: apiRes.data.user_id, userName: apiRes.data.name, userType: 'social' })
+          JSON.stringify({
+            userId: apiRes.data.user_id,
+            userName: apiRes.data.name,
+            userType: 'social',
+          }),
         );
-        if (res.data.success) {
-          await AsyncStorage.setItem(
-            'userData',
-            JSON.stringify({ userId: res.data.user_id, userName: res.data.name, userType: 'social' })
-          );
-          
-          Alert.alert('Başarılı', `Hoş geldin, ${res.data.name}`);
-          
-          // Direkt Onboarding'e yönlendir
-          navigation.reset({
-            index: 0,
-            routes: [
-              { name: 'Onboarding', params: { userId: res.data.user_id, userName: res.data.name } },
-            ],
-          });
-        }
+        Alert.alert(t('common.success'), `${t('common.welcome')}, ${apiRes.data.name}`);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Home', params: { userId: apiRes.data.user_id, userName: apiRes.data.name } }],
+        });
       } else {
-        Alert.alert('Hata', apiRes.data.error || 'Sunucu hatası');
+        Alert.alert(t('common.error'), apiRes.data.error || t('auth.signupError'));
       }
-    } catch (error: any) {
-      if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
-        Alert.alert('Google Kayıt Hatası', `${error.code ?? ''}\n${error.message ?? ''}`);
-      }
+    } catch (err: any) {
+      if (err.code !== statusCodes.SIGN_IN_CANCELLED)
+        Alert.alert(t('common.error'), t('auth.signupError'));
     }
   };
 
-  // ----- APPLE SIGNUP -----
   const handleAppleSignup = async () => {
     try {
-      // Perform the Apple authentication request
+      const rawNonce = uuidv4();
+      const state = uuidv4();
+      const hashedNonce = SHA256(rawNonce).toString();
+
       const appleAuthRequestResponse = await appleAuth.performRequest({
         requestedOperation: appleAuth.Operation.LOGIN,
         requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
+        nonce: hashedNonce,
+        state,
       });
 
-      // Get current authentication state
       const credentialState = await appleAuth.getCredentialStateForUser(
-        appleAuthRequestResponse.user
+        appleAuthRequestResponse.user,
       );
 
       if (credentialState === appleAuth.State.AUTHORIZED) {
         const { identityToken, user, fullName, email } = appleAuthRequestResponse;
-        
+
         if (!identityToken) {
-          Alert.alert('Hata', 'Apple kimlik bilgisi alınamadı.');
+          Alert.alert(t('common.error'), 'Apple ID error');
           return;
         }
 
-        // Prepare payload for backend
         const payload = {
           provider: 'apple',
           token: identityToken,
           user_id: user,
+          nonce: rawNonce,
           email: email || '',
-          name: fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim() : '',
+          name: fullName
+            ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim()
+            : '',
+          language,
         };
 
-        console.log('Sending Apple payload:', payload);
         const res = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
-        console.log('Response from Apple loginSocial:', res.data);
-        
+
         if (res.data.success) {
-          // Save user data for persistent login
           await AsyncStorage.setItem(
             'userData',
-            JSON.stringify({ userId: res.data.user_id, userName: res.data.name, userType: 'social' })
+            JSON.stringify({ userId: res.data.user_id, userName: res.data.name, userType: 'social' }),
           );
-          Alert.alert('Başarılı', `Hoş geldin, ${res.data.name}`);
+          Alert.alert(t('common.success'), `${t('common.welcome')}, ${res.data.name}`);
           navigation.reset({
             index: 0,
-            routes: [
-              { name: 'Home', params: { userId: res.data.user_id, userName: res.data.name, userType: 'social' } },
-            ],
+            routes: [{ name: 'Home', params: { userId: res.data.user_id, userName: res.data.name } }],
           });
         } else {
-          Alert.alert('Hata', res.data.error || 'Apple kayıt başarısız');
+          Alert.alert(t('common.error'), res.data.error || t('auth.signupError'));
         }
       } else {
-        Alert.alert('Hata', 'Apple kimlik doğrulama başarısız.');
+        Alert.alert(t('common.error'), 'Apple auth error');
       }
     } catch (error: any) {
-      console.log('Apple signup error:', error);
-      if (error.code === appleAuth.Error.CANCELED) {
-        console.log('Apple sign in cancelled by user.');
-      } else {
-        Alert.alert('Hata', 'Apple kayıt başarısız.');
-      }
+      if (error.code !== appleAuth.Error.CANCELED)
+        Alert.alert(t('common.error'), t('auth.signupError'));
     }
   };
 
+  /* ------------------------------------------------------------------ */
+  /* -----------------------------  UI  ------------------------------- */
+  /* ------------------------------------------------------------------ */
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* Geri Dön Butonu */}
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+    <LinearGradient
+      colors={['#6B75D6','#46B168']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Floating Icons */}
+            <Animated.View
+              style={[
+                styles.floatingIcon,
+                styles.floatingIcon1,
+                { opacity: fadeAnim, transform: [{ translateY: float1 }] },
+              ]}>
+              <MaterialCommunityIcons name="heart-pulse" size={60} color="rgba(255,255,255,0.1)" />
+            </Animated.View>
 
-        <Text style={styles.title}>Hesabını Oluştur</Text>
+            <Animated.View
+              style={[
+                styles.floatingIcon,
+                styles.floatingIcon2,
+                { opacity: fadeAnim, transform: [{ translateY: float2 }] },
+              ]}>
+              <MaterialCommunityIcons name="pill" size={50} color="rgba(255,255,255,0.1)" />
+            </Animated.View>
 
-        {/* İsim Alanı */}
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="person-outline" size={20} color="#aaa" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="İsim Soyisim"
-            placeholderTextColor="#aaa"
-            value={name}
-            onChangeText={setName}
-          />
-        </View>
+            {/* Back Button */}
+            <Animated.View
+              style={[styles.backButton, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButtonInner}>
+                <MaterialIcons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+            </Animated.View>
 
-        {/* Email Alanı */}
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="email" size={20} color="#aaa" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#aaa"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
+            {/* Header */}
+            <Animated.View
+              style={[styles.headerContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+              <View style={styles.logoContainer}>
+                <LinearGradient colors={['#fff', '#f0f0f0']} style={styles.logo}>
+                  <MaterialCommunityIcons name="medical-bag" size={50} color="#667eea" />
+                </LinearGradient>
+              </View>
+              <Text style={styles.title}>{t('auth.signupTitle')}</Text>
+              <Text style={styles.subtitle}>{t('auth.createAccount')}</Text>
+            </Animated.View>
 
-        {/* Şifre Alanı */}
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="lock" size={20} color="#aaa" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Şifre"
-            placeholderTextColor="#aaa"
-            secureTextEntry={!showPass}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeIconContainer}>
-            <MaterialIcons
-              name={showPass ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#aaa"
-            />
-          </TouchableOpacity>
-        </View>
-        
-        {/* "Okudum, anladım ve kabul ediyorum" Bölümü */}
-        <View style={styles.termsContainer}>
-          <TouchableOpacity onPress={() => setTermsAccepted(!termsAccepted)}>
-            <MaterialIcons
-              name={termsAccepted ? 'check-box' : 'check-box-outline-blank'}
-              size={24}
-              color="#fff"
-            />
-          </TouchableOpacity>
-          <Text style={styles.termsText}>
-            Okudum, anladım ve{' '}
-            <Text style={styles.termsLink} onPress={() => setShowTermsModal(true)}>
-              Hizmet Şartlarını
-            </Text>{' '}
-            kabul ediyorum.
-          </Text>
-        </View>
-        
-        <TouchableOpacity style={styles.signupButton} onPress={handleSignup}>
-          <Text style={styles.signupButtonText}>Kayıt Ol</Text>
-        </TouchableOpacity>
+            {/* Form */}
+            <Animated.View style={[styles.formContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+              {/* Name */}
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons name="person" size={20} color="#667eea" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.name')}
+                  placeholderTextColor="#999"
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
 
-        {/* Guest Login Button */}
-        <TouchableOpacity style={styles.guestButton} onPress={handleGuestLogin}>
-          <MaterialIcons name="person-outline" size={20} color="#C8FF00" style={{ marginRight: 8 }} />
-          <Text style={styles.guestButtonText}>Misafir Olarak Devam Et</Text>
-        </TouchableOpacity>
+              {/* Email */}
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons name="email" size={20} color="#667eea" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.email')}
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.loginText}>
-            Hesabın Var Mı? <Text style={{ fontWeight: '700' }}>Giriş Yap</Text>
-          </Text>
-        </TouchableOpacity>
+              {/* Password */}
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons name="lock" size={20} color="#667eea" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.password')}
+                  placeholderTextColor="#999"
+                  secureTextEntry={!showPass}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeIcon}>
+                  <MaterialIcons name={showPass ? 'visibility-off' : 'visibility'} size={20} color="#999" />
+                </TouchableOpacity>
+              </View>
 
-        {/* Sosyal Giriş Bölümü */}
-        <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>Başka Türlü Giriş Yap</Text>
-          <View style={styles.dividerLine} />
-        </View>
-        
-        <View style={styles.socialButtons}>
-          <TouchableOpacity 
-            style={[
-              styles.googleButton,
-              Platform.OS === 'ios' ? {} : { flex: 1 } // Android'de tam genişlik
-            ]} 
-            onPress={handleGoogleSignup}
-          >
-            <Text style={styles.socialButtonText}>GOOGLE</Text>
-          </TouchableOpacity>
-          
-          {/* Apple Sign In */}
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity style={styles.appleButton} onPress={handleAppleSignup}>
-              <MaterialIcons name="apple" size={16} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.socialButtonText}>APPLE</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+              {/* Terms & Conditions */}
+              <TouchableOpacity
+                style={styles.termsRow}
+                onPress={() => setTermsAccepted(prev => !prev)}>
+                <Animated.View style={[styles.checkbox, termsAccepted && styles.checkboxChecked, { transform: [{ scale: pulseAnim }] }]}>
+                  {termsAccepted && <MaterialIcons name="check" size={18} color="#fff" />}
+                </Animated.View>
+                <Text style={styles.termsText}>
+                  {t('auth.agreeTerms')}{' '}
+                  <Text style={styles.linkText} onPress={() => setShowTermsModal(true)}>
+                    {t('auth.readTerms')}
+                  </Text>
+                </Text>
+              </TouchableOpacity>
 
-      </View>
+              {/* Signup Button */}
+              <TouchableOpacity style={styles.signupButton} onPress={handleSignup} disabled={loading}>
+                <LinearGradient colors={['#C8FF00', '#A8E000']} style={styles.signupGradient}>
+                  {loading ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <Text style={styles.signupButtonText}>{t('auth.signup')}</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
 
-      {/* Hizmet Şartları Modal */}
-      <Modal
-        visible={showTermsModal}
-        animationType="slide"
-        onRequestClose={() => setShowTermsModal(false)}>
-        <SafeAreaView style={styles.modalContainer}>
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <Text style={styles.modalTitle}>DoktorumAI Hizmet Şartları</Text>
-            <Text style={styles.modalText}>
-              {`Güncellendi: Mart 2025
+              {/* Guest */}
+              <TouchableOpacity style={styles.guestButton} onPress={handleGuestLogin}>
+                <MaterialIcons name="person-outline" size={20} color="#fff" />
+                <Text style={styles.guestButtonText}>{t('auth.guestLogin')}</Text>
+              </TouchableOpacity>
 
-Hoş geldiniz ve DoktorumAI'ye gösterdiğiniz ilgi için teşekkür ederiz. DoktorumAI, DoktorumAI A.Ş. tarafından işletilen bir hizmettir. "Biz", "bize" ve "bizim" terimleri, DoktorumAI A.Ş.'yi ifade eder.
+              {/* Social Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>{t('auth.orSignupWith')}</Text>
+                <View style={styles.dividerLine} />
+              </View>
 
-1. Giriş
-Bu Hizmet Şartları ("Şartlar" veya "Sözleşme"), https://www.DoktorumAI.com adresindeki web sitemiz, mobil uygulamalarımız ve diğer dijital hizmetlerimiz (topluca "Hizmet") için uygulanacak kuralları belirler. Bu Sözleşme, sizin ("Kullanıcı" veya "Siz") ile DoktorumAI arasında yasal bağlayıcılığı olan bir sözleşmedir. Lütfen dikkatlice okuyunuz. Hizmetimizi kullanarak, bu Şartları okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan etmiş olursunuz.
+              {/* Social Buttons */}
+              <View style={styles.socialButtons}>
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.googleButton]}
+                  onPress={handleGoogleSignup}>
+                  <MaterialCommunityIcons name="google" size={20} color="#fff" />
+                  <Text style={styles.socialButtonText}>Google</Text>
+                </TouchableOpacity>
 
-2. Onay
-Hizmetimizi kullanarak, bu Şartlar ve Gizlilik Politikamız kapsamında bilgilerinizin toplanması ve kullanılması hususunda onay vermiş olursunuz.
+                {Platform.OS === 'ios' && (
+                  <TouchableOpacity
+                    style={[styles.socialButton, styles.appleButton]}
+                    onPress={handleAppleSignup}>
+                    <MaterialIcons name="apple" size={20} color="#000" />
+                    <Text style={[styles.socialButtonText, { color: '#000' }]}>Apple</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
-3. Doktor ile İletişim
-DoktorumAI, sağlık profesyonelleriyle iletişim kurmanıza yardımcı bir hizmettir. Sağlık bilgileri ve öneriler, mutlaka doktorunuzla tartışılmalıdır.
-
-4. Bilginin Doğruluğu
-DoktorumAI tarafından sağlanan bilgiler zaman zaman hatalı olabilir. Verilen bilgilerin doğruluğu garanti edilmez; her zaman gerçek doktorunuzla teyit edilmelidir.
-
-5. Tıbbi Tavsiye Değildir
-DoktorumAI, tıbbi tavsiye vermemekte, teşhis veya tedavi sağlamamaktadır. Hizmetimiz yalnızca doktorunuzla iletişim kurmanıza yardımcı olmak içindir.
-
-6. Acil Durumlar
-DoktorumAI, acil tıbbi durumlar için kullanılmamalıdır. Acil bir durumda lütfen yerel acil servislerle iletişime geçiniz.
-
-7. Kullanım Sınırlamaları
-Hizmetimiz belirli kullanım kısıtlamalarına tabidir ve yasalarla uyumlu olarak kullanılmalıdır. Hizmetin uygunsuz kullanımı durumunda hesabınız askıya alınabilir veya iptal edilebilir.
-
-8. Veri ve Bilgi
-Hizmetimizi kullanırken sağladığınız veriler, DoktorumAI Gizlilik Politikası kapsamında işlenecektir.
-
-9. Yasal Sorumluluk
-DoktorumAI, sağlanan bilgilerin doğruluğu ve güvenilirliği konusunda garanti vermez; dolaylı zararlar dahil hiçbir sorumluluk kabul etmez.
-
-10. Değişiklikler
-DoktorumAI, bu Şartları herhangi bir zamanda değiştirme hakkını saklı tutar. Yapılan değişiklikler sonrasında hizmeti kullanmaya devam etmeniz, yeni şartları kabul ettiğiniz anlamına gelir.
-
-Lütfen bu şartları dikkatlice okuyunuz. Hizmetimizi kullanmadan önce lütfen tam olarak onaylayınız.`}
-            </Text>
+              {/* Login Link */}
+              <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.loginLink}>
+                <Text style={styles.loginText}>
+                  {t('auth.haveAccount')}{' '}
+                  <Text style={styles.loginTextBold}>{t('auth.login')}</Text>
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
           </ScrollView>
-          <TouchableOpacity style={styles.modalButton} onPress={() => setShowTermsModal(false)}>
-            <Text style={styles.modalButtonText}>Kabul Et</Text>
-          </TouchableOpacity>
-        </SafeAreaView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+
+      {/* Terms Modal */}
+      <Modal visible={showTermsModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView>
+              {/* Buraya gerçek KVKK / Terms metninizi gömebilirsiniz */}
+              <Text style={styles.modalTitle}>{t('auth.termsTitle')}</Text>
+              <Text style={styles.modalParagraph}>
+                Lorem ipsum dolor sit amet, consectetur adipisicing elit. Magni, corporis...
+              </Text>
+            </ScrollView>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setShowTermsModal(false)}>
+              <Text style={styles.modalCloseText}>{t('common.close')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
-    </SafeAreaView>
+    </LinearGradient>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    backgroundColor: '#000',
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  title: {
-    fontSize: 28,
-    color: '#fff',
-    fontWeight: '600',
-    marginTop: 30,
-    marginBottom: 20,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#333',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 18,
-    paddingVertical: 12,
-  },
-  eyeIconContainer: {
-    padding: 4,
-  },
-  signupButton: {
-    backgroundColor: '#333',
-    paddingVertical: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  signupButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  loginText: {
-    color: '#fff',
-    textAlign: 'center',
-    marginTop: 15,
-    fontSize: 15,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 25,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#333',
-  },
-  dividerText: {
-    color: '#fff',
-    marginHorizontal: 8,
-    fontSize: 12,
-  },
-socialButtons: {
-  flexDirection: 'row',
-  justifyContent: Platform.OS === 'ios' ? 'space-between' : 'center',
-  gap: Platform.OS === 'ios' ? 10 : 0,
-},
+/* ------------------------------------------------------------------ */
+/* ---------------------------  STYLES  ----------------------------- */
+/* ------------------------------------------------------------------ */
 
-// googleButton style'ını güncelle:
-googleButton: {
-  backgroundColor: '#DB4437',
-  borderRadius: 8,
-  paddingVertical: 12,
-  flex: Platform.OS === 'ios' ? 1 : 0,
-  minWidth: Platform.OS === 'ios' ? 0 : '80%',
-  alignItems: 'center',
-  marginRight: Platform.OS === 'ios' ? 10 : 0,
-},
-  socialButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  termsContainer: {
-    flexDirection: 'row',
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
+  keyboardView: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 30, paddingBottom: 30 },
+
+  floatingIcon: { position: 'absolute' },
+  floatingIcon1: { top: H * 0.15, right: -20 },
+  floatingIcon2: { top: H * 0.7, left: -20 },
+
+  backButton: { marginTop: 20, alignSelf: 'flex-start' },
+  backButtonInner: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 24,
     alignItems: 'center',
-    marginVertical: 20,
-  },
-  appleButton: {
-    backgroundColor: '#000',
-    borderWidth: 1,
-    borderColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 12,
-    flex: 1,
-    alignItems: 'center',
-    flexDirection: 'row',
     justifyContent: 'center',
   },
+
+  headerContainer: { alignItems: 'center', marginTop: 40, marginBottom: 40 },
+  logoContainer: { marginBottom: 20 },
+  logo: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  title: { fontSize: 32, fontWeight: 'bold', color: '#fff', marginBottom: 8 },
+  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.8)' },
+
+  formContainer: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 30,
+    padding: 30,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 15,
+    marginBottom: 15,
+    paddingHorizontal: 15,
+    height: 55,
+  },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, fontSize: 16, color: '#333' },
+  eyeIcon: { padding: 5 },
+
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 10,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#667eea',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxChecked: {
+    backgroundColor: '#667eea',
+    borderColor: '#667eea',
+  },
+  termsText: { flex: 1, color: '#666', fontSize: 14 },
+  linkText: { color: '#667eea', textDecorationLine: 'underline' },
+
+  signupButton: { marginBottom: 15, elevation: 5, shadowColor: '#C8FF00', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.5, shadowRadius: 5 },
+  signupGradient: { paddingVertical: 16, borderRadius: 25, alignItems: 'center' },
+  signupButtonText: { fontSize: 18, fontWeight: 'bold', color: '#000' },
+
   guestButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#C8FF00',
-    paddingVertical: 16,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    marginTop: 15,
+    backgroundColor: 'rgba(102,126,234,0.1)',
+    borderWidth: 2,
+    borderColor: '#667eea',
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginBottom: 20,
+    gap: 8,
   },
-  guestButtonText: {
-    color: '#C8FF00',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  termsText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 10,
-  },
-  termsLink: {
-    textDecorationLine: 'underline',
-    color: '#C8FF00',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    padding: 20,
-  },
-  modalContent: {
-    paddingBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#C8FF00',
-    marginBottom: 10,
-  },
-  modalText: {
-    color: '#fff',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  modalButton: {
-    backgroundColor: '#C8FF00',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-  },
+  guestButtonText: { color: '#667eea', fontSize: 16, fontWeight: '600' },
+
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e0e0e0' },
+  dividerText: { color: '#999', marginHorizontal: 10, fontSize: 12 },
+
+  socialButtons: { flexDirection: 'row', justifyContent: 'center', gap: 15 },
+  socialButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 20, gap: 8 },
+  googleButton: { backgroundColor: '#DB4437' },
+  appleButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#000' },
+  socialButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+
+  loginLink: { alignItems: 'center', marginTop: 10 },
+  loginText: { color: '#666', fontSize: 15 },
+  loginTextBold: { fontWeight: 'bold', color: '#667eea' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#fff', borderRadius: 20, maxHeight: '80%' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', margin: 20 },
+  modalParagraph: { fontSize: 14, color: '#555', marginHorizontal: 20, marginBottom: 20 },
+  modalClose: { padding: 15, alignItems: 'center', borderTopWidth: 1, borderColor: '#eee' },
+  modalCloseText: { color: '#667eea', fontSize: 16, fontWeight: '600' },
 });

@@ -1,6 +1,6 @@
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,55 +10,121 @@ import {
   StyleSheet,
   SafeAreaView,
   Platform,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  ScrollView,
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { GoogleSignin, statusCodes, isSuccessResponse } from '@react-native-google-signin/google-signin';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { GoogleSignin, statusCodes} from '@react-native-google-signin/google-signin';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
 import SHA256 from 'crypto-js/sha256';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
 
 type LoginScreenProps = StackScreenProps<RootStackParamList, 'Login'>;
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
-
-interface GoogleSignInResponse {
-  idToken: string;
-  user: {
-    email: string;
-    name: string;
-    // Additional properties if needed
-  };
-}
+const { width: W, height: H } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { t, language } = useLanguage();
 
-  // ======== Configure Google Signin once ========
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const float1 = useRef(new Animated.Value(0)).current;
+  const float2 = useRef(new Animated.Value(0)).current;
+  const float3 = useRef(new Animated.Value(0)).current;
+  const float4 = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
+    StatusBar.setBarStyle('light-content');
     GoogleSignin.configure({
-      webClientId:
-        '100126624381-4bu382pfb9p58o67b29adubjesa3ib62.apps.googleusercontent.com',
-      iosClientId:
-        '100126624381-4bu382pfb9p58o67b29adubjesa3ib62.apps.googleusercontent.com', // Replace with your actual iOS client ID
+      webClientId: '100126624381-4bu382pfb9p58o67b29adubjesa3ib62.apps.googleusercontent.com',
+      iosClientId: '100126624381-4bu382pfb9p58o67b29adubjesa3ib62.apps.googleusercontent.com',
+        offlineAccess: true,                       // sunucu doğrulaması yapıyoruz
+        scopes: ['profile', 'email'],  
     });
+    
+    startAnimations();
   }, []);
+
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Floating animations
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(float1, {
+          toValue: -20,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(float1, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(float2, {
+          toValue: 20,
+          duration: 3500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(float2, {
+          toValue: 0,
+          duration: 3500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Hata', 'Email ve şifre gereklidir.');
+      Alert.alert(t('common.error'), t('auth.emailRequired') + ' ' + t('auth.passwordRequired'));
       return;
     }
+    
+    setLoading(true);
     try {
-      const response = await axios.post(`${SERVER_URL}?action=login`, { email, password });
+      const response = await axios.post(`${SERVER_URL}?action=login`, { email, password, language });
       if (response.data.success) {
-        // Save login state to persist login across app restarts
         await AsyncStorage.setItem(
           'userData',
           JSON.stringify({ 
@@ -67,73 +133,66 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             userType: 'registered' 
           })
         );
-        Alert.alert('Başarılı', 'Giriş yapıldı.');
+        Alert.alert(t('common.success'), t('auth.loginSuccess'));
         const onboardingCompleted = await AsyncStorage.getItem(`onboarding_completed_${response.data.user_id}`);
-          if (!onboardingCompleted) {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Onboarding', params: { userId: response.data.user_id, userName: response.data.name } }],
-            });
-          } else {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Home', params: { userId: response.data.user_id, userName: response.data.name } }],
-            });
-          }
-
+        if (!onboardingCompleted) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Onboarding', params: { userId: response.data.user_id, userName: response.data.name } }],
+          });
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Home', params: { userId: response.data.user_id, userName: response.data.name } }],
+          });
+        }
       } else {
-        Alert.alert('Hata', response.data.error || 'Giriş başarısız');
+        Alert.alert(t('common.error'), response.data.error || t('auth.loginError'));
       }
     } catch (error) {
-      Alert.alert('Hata', 'Sunucuya bağlanılamadı.');
+      Alert.alert(t('common.error'), t('auth.serverError'));
+    } finally {
+      setLoading(false);
     }
   };
-const handleForgotPassword = () => navigation.navigate('PasswordReset');
-  // ----- GUEST LOGIN -----
-const handleGuestLogin = async () => {
-  try {
-    const guestId = 'guest_' + Date.now();
-    const guestName = 'Misafir Kullanıcı';
 
-    // mock a “success” payload instead of concatenating strings
-    const payload = { success: true, user_id: guestId, name: guestName };
+  const handleForgotPassword = () => navigation.navigate('PasswordReset');
 
-    if (payload.success) {
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    try {
+      const guestId = 'guest_' + Date.now();
+      const guestName = t('common.guest');
+
       await AsyncStorage.setItem(
         'userData',
         JSON.stringify({
-          userId: payload.user_id,
-          userName: payload.name,
+          userId: guestId,
+          userName: guestName,
           userType: 'guest',
         })
       );
-      Alert.alert('Başarılı', 'Misafir olarak giriş yapıldı.');
-      const onboardKey = `onboarding_completed_${payload.user_id}`;
-      const onboardingCompleted = await AsyncStorage.getItem(onboardKey);
-      const nextRoute = onboardingCompleted ? 'Home' : 'Onboarding';
+      Alert.alert(t('common.success'), t('auth.guestSuccess'));
       navigation.reset({
         index: 0,
-        routes: [{ name: nextRoute, params: { userId: payload.user_id, userName: payload.name } }],
+        routes: [{ name: 'Home', params: { userId: guestId, userName: guestName } }],
       });
+    } catch {
+      Alert.alert(t('common.error'), t('auth.guestError'));
+    } finally {
+      setLoading(false);
     }
-  } catch {
-    Alert.alert('Hata', 'Misafir girişi başarısız.');
-  }
-};
-
+  };
 
   const handleGoogleLogin = async () => {
     try {
       await GoogleSignin.hasPlayServices();
       const res = await GoogleSignin.signIn();
-      
-      if (!isSuccessResponse(res)) return; // user cancelled
-      
-      let { idToken, user } = res.data;
+      const { idToken, user } = res;   
       if (!idToken) idToken = (await GoogleSignin.getTokens()).idToken;
       
       if (!idToken) {
-        Alert.alert('Hata', 'Google kimliği alınamadı.');
+        Alert.alert(t('common.error'), 'Google ID token error');
         return;
       }
       
@@ -142,54 +201,46 @@ const handleGuestLogin = async () => {
         token: idToken,
         name: user.name || '',
         email: user.email || '',
+        language,
       };
       
-      console.log('Sending payload:', payload);
       const apiRes = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
-      console.log('Response from loginSocial:', apiRes.data);
       
       if (apiRes.data.success) {
-        // Save user data for persistent login
         await AsyncStorage.setItem(
           'userData',
           JSON.stringify({ userId: apiRes.data.user_id, userName: apiRes.data.name, userType: 'social' })
         );
-        Alert.alert('Başarılı', `Hoş geldin, ${apiRes.data.name}`);
+        Alert.alert(t('common.success'), `${t('common.welcome')}, ${apiRes.data.name}`);
         navigation.reset({
           index: 0,
           routes: [
-            { name: 'Home', params: { userId: apiRes.data.user_id, userName: apiRes.data.name, userType: 'social' } },
+            { name: 'Home', params: { userId: apiRes.data.user_id, userName: apiRes.data.name } },
           ],
         });
       } else {
-        Alert.alert('Hata', apiRes.data.error || 'Sunucu hatası');
+        Alert.alert(t('common.error'), apiRes.data.error || t('auth.loginError'));
       }
     } catch (err: any) {
-      console.log('Error in Google login:', err);
-      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
-        console.log('Google sign in cancelled by user.');
-      } else {
-        Alert.alert('Hata', 'Google login başarısız.');
+      if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert(t('common.error'), t('auth.loginError'));
       }
     }
   };
 
-  // ----- APPLE LOGIN -----
   const handleAppleLogin = async () => {
     try {
-        // rastgele nonce & state
-        const rawNonce   = uuidv4();
-        const state      = uuidv4();
-        const hashedNonce = SHA256(rawNonce).toString(); // Apple SHA-256 ister
+      const rawNonce = uuidv4();
+      const state = uuidv4();
+      const hashedNonce = SHA256(rawNonce).toString();
 
-        const appleAuthRequestResponse = await appleAuth.performRequest({
-          requestedOperation: appleAuth.Operation.LOGIN,
-          requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
-          nonce : hashedNonce,
-          state : state,
-        });
+      const appleAuthRequestResponse = await appleAuth.performRequest({
+        requestedOperation: appleAuth.Operation.LOGIN,
+        requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
+        nonce: hashedNonce,
+        state: state,
+      });
 
-      // Get current authentication state
       const credentialState = await appleAuth.getCredentialStateForUser(
         appleAuthRequestResponse.user
       );
@@ -198,284 +249,483 @@ const handleGuestLogin = async () => {
         const { identityToken, user, fullName, email } = appleAuthRequestResponse;
         
         if (!identityToken) {
-          Alert.alert('Hata', 'Apple kimlik bilgisi alınamadı.');
+          Alert.alert(t('common.error'), 'Apple ID error');
           return;
         }
 
-        // Prepare payload for backend
         const payload = {
           provider: 'apple',
           token: identityToken,
           user_id: user,
-          nonce    : rawNonce,
+          nonce: rawNonce,
           email: email || '',
           name: fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim() : '',
+          language,
         };
 
-        console.log('Sending Apple payload:', payload);
         const res = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
-        console.log('Response from Apple loginSocial:', res.data);
         
         if (res.data.success) {
-          // Save user data for persistent login
           await AsyncStorage.setItem(
             'userData',
             JSON.stringify({ userId: res.data.user_id, userName: res.data.name, userType: 'social' })
           );
-          Alert.alert('Başarılı', `Hoş geldin, ${res.data.name}`);
+          Alert.alert(t('common.success'), `${t('common.welcome')}, ${res.data.name}`);
           navigation.reset({
             index: 0,
             routes: [
-              { name: 'Home', params: { userId: res.data.user_id, userName: res.data.name, userType: 'social' } },
+              { name: 'Home', params: { userId: res.data.user_id, userName: res.data.name } },
             ],
           });
         } else {
-          Alert.alert('Hata', res.data.error || 'Apple login başarısız');
+          Alert.alert(t('common.error'), res.data.error || t('auth.loginError'));
         }
       } else {
-        Alert.alert('Hata', 'Apple kimlik doğrulama başarısız.');
+        Alert.alert(t('common.error'), 'Apple auth error');
       }
     } catch (error: any) {
-      console.log('Apple login error:', error);
-      if (error.code === appleAuth.Error.CANCELED) {
-        console.log('Apple sign in cancelled by user.');
-      } else {
-        Alert.alert('Hata', 'Apple login başarısız.');
-      }
+  if (error.code !== appleAuth.Error.CANCELED) {
+    console.warn('Apple login error', error);
+    Alert.alert(t('common.error'), error.message || t('auth.loginError'));
+  }
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* Back Button (top-left) */}
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-
-        <Text style={styles.title}>Giriş Yap</Text>
-
-        {/* Email Field */}
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="email" size={20} color="#aaa" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#aaa"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
-
-        {/* Password Field (with visibility toggle) */}
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="lock" size={20} color="#aaa" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Şifre"
-            placeholderTextColor="#aaa"
-            secureTextEntry={!showPass}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPass(!showPass)}
-            style={styles.eyeIconContainer}
+    <LinearGradient
+     colors={['#6B75D6','#46B168']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
           >
-            <MaterialIcons
-              name={showPass ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#aaa"
-            />
-          </TouchableOpacity>
-        </View>
+        {/* Floating Background Icons */}
+        <Animated.View
+        pointerEvents="none"
+          style={[
+            styles.floatingIcon,
+            styles.floatingIcon1,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: float1 }],
+            },
+          ]}
+        >
+          <MaterialIcons name="favorite" size={40} color="rgba(255,255,255,0.1)" />
+        </Animated.View>
 
-        {/* Forgot Password */}
-        <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
-          <Text style={styles.forgotPasswordText}>Şifremi Unuttum</Text>
-        </TouchableOpacity>
+        <Animated.View
+        pointerEvents="none"
+          style={[
+            
+            styles.floatingIcon,
+            styles.floatingIcon2,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: float2 }],
+            },
+          ]}
+        >
+          <MaterialCommunityIcons name="pill" size={50} color="rgba(255,255,255,0.1)" />
+        </Animated.View>
 
-        {/* Login Button */}
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>Giriş</Text>
-        </TouchableOpacity>
+        <Animated.View
+        pointerEvents="none"
+          style={[
+            styles.floatingIcon,
+            styles.floatingIcon3,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: float3 }],
+            },
+          ]}
+        >
+          <MaterialCommunityIcons name="dna" size={60} color="rgba(255,255,255,0.1)" />
+        </Animated.View>
 
-        {/* Guest Login Button */}
-        <TouchableOpacity style={styles.guestButton} onPress={handleGuestLogin}>
-          <MaterialIcons name="person-outline" size={20} color="#C8FF00" style={{ marginRight: 8 }} />
-          <Text style={styles.guestButtonText}>Misafir Olarak Devam Et</Text>
-        </TouchableOpacity>
+        <Animated.View
+        pointerEvents="none"
+          style={[
+            styles.floatingIcon,
+            styles.floatingIcon4,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: float4 }],
+            },
+          ]}
+        >
+          <MaterialCommunityIcons name="stethoscope" size={45} color="rgba(255,255,255,0.1)" />
+        </Animated.View>
 
-        {/* Signup Link */}
-        <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-          <Text style={styles.signupText}>
-            Hesabın Yok Mu? <Text style={{ fontWeight: '700' }}>Kayıt Ol</Text>
-          </Text>
-        </TouchableOpacity>
+            {/* Back Button */}
+            <Animated.View
+              style={[
+                styles.backButton,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: scaleAnim }],
+                },
+              ]}
+            >
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButtonInner}>
+                <MaterialIcons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+            </Animated.View>
 
-        {/* Divider */}
-        <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>Başka Türlü Giriş Yap</Text>
-          <View style={styles.dividerLine} />
-        </View>
+            {/* Logo & Title */}
+            <Animated.View
+              style={[
+                styles.headerContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
+            >
+              <View style={styles.logoContainer}>
+                <LinearGradient
+                  colors={['#fff', '#f0f0f0']}
+                  style={styles.logo}
+                >
+                  <MaterialCommunityIcons name="medical-bag" size={50} color="#667eea" />
+                </LinearGradient>
+              </View>
+              
+              <Text style={styles.title}>{t('auth.loginTitle')}</Text>
+              <Text style={styles.subtitle}>{t('common.welcome')} to Sağlık Asistanım AI</Text>
+            </Animated.View>
 
-        {/* Social Buttons */}
-        <View style={styles.socialButtons}>
-          {/* Google */}
-          <TouchableOpacity 
-            style={[
-              styles.googleButton,
-              Platform.OS === 'ios' ? {} : { flex: 1 } // Android'de tam genişlik
-            ]} 
-            onPress={handleGoogleLogin}
-          >
-            <Text style={styles.socialButtonText}>GOOGLE</Text>
-          </TouchableOpacity>
-          
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity style={styles.appleButton} onPress={handleAppleLogin}>
-              <MaterialIcons name="apple" size={16} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.socialButtonText}>APPLE</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </SafeAreaView>
+            {/* Form Container */}
+            <Animated.View
+              style={[
+                styles.formContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: scaleAnim }],
+                },
+              ]}
+            >
+              {/* Email Input */}
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons name="email" size={20} color="#667eea" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.email')}
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              {/* Password Input */}
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons name="lock" size={20} color="#667eea" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.password')}
+                  placeholderTextColor="#999"
+                  secureTextEntry={!showPass}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPass(!showPass)}
+                  style={styles.eyeIcon}
+                >
+                  <MaterialIcons
+                    name={showPass ? 'visibility-off' : 'visibility'}
+                    size={20}
+                    color="#999"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Forgot Password */}
+              <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
+                <Text style={styles.forgotPasswordText}>{t('auth.forgotPassword')}</Text>
+              </TouchableOpacity>
+
+              {/* Login Button */}
+              <TouchableOpacity 
+                style={styles.loginButton}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                <LinearGradient
+                  colors={['#C8FF00', '#A8E000']}
+                  style={styles.loginButtonGradient}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <Text style={styles.loginButtonText}>{t('auth.login')}</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Guest Login */}
+              <TouchableOpacity style={styles.guestButton} onPress={handleGuestLogin}>
+                <MaterialIcons name="person-outline" size={20} color="#fff" />
+                <Text style={styles.guestButtonText}>{t('auth.guestLogin')}</Text>
+              </TouchableOpacity>
+
+              {/* Signup Link */}
+              <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={styles.signupLink}>
+                <Text style={styles.signupText}>
+                  {t('auth.noAccount')} <Text style={styles.signupTextBold}>{t('auth.signup')}</Text>
+                </Text>
+              </TouchableOpacity>
+
+              {/* Social Login Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>{t('auth.orLoginWith')}</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              {/* Social Buttons */}
+              <View style={styles.socialButtons}>
+                <TouchableOpacity 
+                  style={[styles.socialButton, styles.googleButton]}
+                  onPress={handleGoogleLogin}
+                >
+                  <MaterialCommunityIcons name="google" size={20} color="#fff" />
+                  <Text style={styles.socialButtonText}>Google</Text>
+                </TouchableOpacity>
+                
+                {Platform.OS === 'ios' && (
+                  <TouchableOpacity 
+                    style={[styles.socialButton, styles.appleButton]}
+                    onPress={handleAppleLogin}
+                  >
+                    <MaterialIcons name="apple" size={20} color="#000" />
+                    <Text style={[styles.socialButtonText, { color: '#000' }]}>Apple</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
   container: {
     flex: 1,
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 30,
+    paddingBottom: 30,
+  },
+  floatingIcon: {
+    position: 'absolute',
+  },
+  floatingIcon1: {
+    top: H * 0.1,
+    left: W * 0.1,
+  },
+  floatingIcon2: {
+    top: H * 0.2,
+    right: W * 0.1,
+  },
+  floatingIcon3: {
+    top: H * 0.7,
+    left: W * 0.15,
+  },
+  floatingIcon4: {
+    top: H * 0.8,
+    right: W * 0.2,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 22,
+    marginTop: 20,
+    alignSelf: 'flex-start',
+  },
+  backButtonInner: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+  },
+  headerContainer: {
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 40,
+  },
+  logoContainer: {
+    marginBottom: 20,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
+    fontWeight: 'bold',
     color: '#fff',
-    fontWeight: '600',
-    marginTop: 30,
-    marginBottom: 30,
+    marginBottom: 8,
   },
-  inputContainer: {
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  formContainer: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 30,
+    padding: 30,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  inputWrapper: {
     flexDirection: 'row',
-    backgroundColor: '#333',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
     alignItems: 'center',
-    marginBottom: 25,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 15,
+    marginBottom: 15,
+    paddingHorizontal: 15,
+    height: 55,
   },
   inputIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   input: {
     flex: 1,
-    color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
+    color: '#333',
   },
-  eyeIconContainer: {
-    padding: 4,
+  eyeIcon: {
+    padding: 5,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: 20,
   },
   forgotPasswordText: {
-    color: '#aaa',
+    color: '#667eea',
     fontSize: 14,
-    textDecorationLine: 'underline',
   },
   loginButton: {
-    backgroundColor: '#333',
-    paddingVertical: 20,
-    borderRadius: 8,
+    marginBottom: 15,
+    elevation: 5,
+    shadowColor: '#C8FF00',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+  },
+  loginButtonGradient: {
+    paddingVertical: 16,
+    borderRadius: 25,
     alignItems: 'center',
   },
   loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#000',
   },
   guestButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#C8FF00',
-    paddingVertical: 16,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    marginTop: 15,
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    borderWidth: 2,
+    borderColor: '#667eea',
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginBottom: 20,
+    gap: 8,
   },
   guestButtonText: {
-    color: '#C8FF00',
+    color: '#667eea',
     fontSize: 16,
     fontWeight: '600',
   },
+  signupLink: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   signupText: {
-    color: '#fff',
-    textAlign: 'center',
-    marginTop: 15,
+    color: '#666',
     fontSize: 15,
+  },
+  signupTextBold: {
+    fontWeight: 'bold',
+    color: '#667eea',
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 25,
+    marginVertical: 20,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#333',
+    backgroundColor: '#e0e0e0',
   },
   dividerText: {
-    color: '#fff',
-    marginHorizontal: 8,
+    color: '#999',
+    marginHorizontal: 10,
     fontSize: 12,
   },
   socialButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
+    justifyContent: 'center',
+    gap: 15,
+  },
+  socialButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 20,
+    gap: 8,
   },
   googleButton: {
     backgroundColor: '#DB4437',
-    borderRadius: 8,
-    paddingVertical: 12,
-    flex: 1,
-    alignItems: 'center',
   },
   appleButton: {
-    backgroundColor: '#000',
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 12,
-    flex: 1,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
+    borderColor: '#000',
   },
   socialButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '600',
     fontSize: 14,
   },
 });

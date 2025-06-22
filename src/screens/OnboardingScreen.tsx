@@ -60,7 +60,7 @@ export default function OnboardingScreen({ route, navigation }: OnboardingScreen
     allergies: '',
   });
 
-const requiredSteps = [
+const requiredSteps: any[] = [
   {
     title: t('onboarding.birthDate'),
     type: 'date',
@@ -97,45 +97,47 @@ const requiredSteps = [
   },
 ];
 
-  const optionalSteps = [
-    {
-      title: t('onboarding.height'),
-      type: 'number',
-      field: 'height',
-      placeholder: '170',
-      unit: 'cm',
-    },
-    {
-      title: t('onboarding.weight'),
-      type: 'number',
-      field: 'weight',
-      placeholder: '70',
-      unit: 'kg',
-    },
-    {
-      title: t('onboarding.bloodType'),
-      type: 'select',
-      field: 'bloodType',
-      options: [
-        { value: '', label: '-' },
-        { value: 'A+', label: 'A+' },
-        { value: 'A-', label: 'A-' },
-        { value: 'B+', label: 'B+' },
-        { value: 'B-', label: 'B-' },
-        { value: 'AB+', label: 'AB+' },
-        { value: 'AB-', label: 'AB-' },
-        { value: '0+', label: '0+' },
-        { value: '0-', label: '0-' },
-      ],
-    },
-    {
-      title: t('onboarding.allergies'),
-      type: 'text',
-      field: 'allergies',
-      placeholder: t('onboarding.allergiesPlaceholder'),
-      multiline: true,
-    },
-  ];
+const optionalSteps: any[] = [
+  {
+    title: t('onboarding.height'),
+    type: 'number',
+    field: 'height',
+    placeholder: '170',
+    unit: 'cm',
+  },
+  {
+    title: t('onboarding.weight'),
+    type: 'number',
+    field: 'weight',
+    placeholder: '70',
+    unit: 'kg',
+  },
+  {
+    title: t('onboarding.bloodType'),
+    type: 'select',
+    field: 'bloodType',
+    options: [
+      { value: '', label: '-' },
+      { value: 'A+', label: 'A+' },
+      { value: 'A-', label: 'A-' },
+      { value: 'B+', label: 'B+' },
+      { value: 'B-', label: 'B-' },
+      { value: 'AB+', label: 'AB+' },
+      { value: 'AB-', label: 'AB-' },
+      { value: '0+', label: '0+' },
+      { value: '0-', label: '0-' },
+    ],
+  },
+  {
+    title: t('onboarding.allergies'),
+    type: 'text',
+    field: 'allergies',
+    placeholder: t('onboarding.allergiesPlaceholder'),
+    multiline: true,
+  },
+];
+
+
 
   const allSteps = [...requiredSteps];
   
