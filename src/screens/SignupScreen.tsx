@@ -17,6 +17,7 @@ import {
   KeyboardAvoidingView,
   StatusBar,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -38,6 +39,7 @@ type SignupScreenProps = StackScreenProps<RootStackParamList, 'Signup'>;
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width: W, height: H } = Dimensions.get('window');
+const Logo = require('../assets/logo-icon.png');
 
 export default function SignupScreen({ navigation }: SignupScreenProps) {
   const [name, setName] = useState('');
@@ -140,40 +142,78 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
   /* -------------------------   API HANDLERS  ------------------------ */
   /* ------------------------------------------------------------------ */
 
-  const handleSignup = async () => {
-    if (!name || !email || !password) {
-      Alert.alert(
-        t('common.error'),
-        `${t('auth.nameRequired')}, ${t('auth.emailRequired')}, ${t('auth.passwordRequired')}`,
-      );
-      return;
-    }
-    if (!termsAccepted) {
-      Alert.alert(t('common.error'), t('auth.termsRequired'));
-      return;
-    }
+// SignupScreen.tsx - handleSignup fonksiyonunu güncelleyin
+const handleSignup = async () => {
+  // Validasyonlar
+  if (!name || name.trim().length < 2) {
+    Alert.alert(t('common.error'), 'İsim en az 2 karakter olmalıdır');
+    return;
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    Alert.alert(t('common.error'), 'Geçerli bir email adresi girin');
+    return;
+  }
+  
+  if (!password || password.length < 6) {
+    Alert.alert(t('common.error'), 'Şifre en az 6 karakter olmalıdır');
+    return;
+  }
+  
+  if (!termsAccepted) {
+    Alert.alert(t('common.error'), t('auth.termsRequired'));
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const response = await axios.post(`${SERVER_URL}?action=signup`, {
-        name,
-        email,
+  setLoading(true);
+  try {
+    const response = await axios.post(
+      `${SERVER_URL}?action=signup`,
+      {
+        name: name.trim(),
+        email: email.trim(),
         password,
         language,
-      });
-
-      if (response.data.success) {
-        Alert.alert(t('common.success'), t('auth.signupSuccess'));
-        navigation.goBack();
-      } else {
-        Alert.alert(t('common.error'), response.data.error || t('auth.signupError'));
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
       }
-    } catch {
-      Alert.alert(t('common.error'), t('auth.serverError'));
-    } finally {
-      setLoading(false);
+    );
+
+    console.log('Signup response:', response.data); // Debug için
+
+    if (response.data.success) {
+      Alert.alert(
+        t('common.success'), 
+        t('auth.signupSuccess'),
+        [
+          {
+            text: t('common.ok'),
+            onPress: () => navigation.navigate('Login')
+          }
+        ]
+      );
+    } else {
+      Alert.alert(t('common.error'), response.data.error || t('auth.signupError'));
     }
-  };
+  } catch (error: any) {
+    console.error('Signup error:', error);
+    
+    if (error.response?.data?.error) {
+      Alert.alert(t('common.error'), error.response.data.error);
+    } else if (error.request) {
+      Alert.alert(t('common.error'), 'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.');
+    } else {
+      Alert.alert(t('common.error'), error.message || t('auth.serverError'));
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGuestLogin = async () => {
     setLoading(true);
@@ -354,7 +394,7 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
               style={[styles.headerContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               <View style={styles.logoContainer}>
                 <LinearGradient colors={['#fff', '#f0f0f0']} style={styles.logo}>
-                  <MaterialCommunityIcons name="medical-bag" size={50} color="#667eea" />
+              <Image source={Logo} style={styles.logoImage} />
                 </LinearGradient>
               </View>
               <Text style={styles.title}>{t('auth.signupTitle')}</Text>
@@ -628,4 +668,6 @@ const styles = StyleSheet.create({
   modalParagraph: { fontSize: 14, color: '#555', marginHorizontal: 20, marginBottom: 20 },
   modalClose: { padding: 15, alignItems: 'center', borderTopWidth: 1, borderColor: '#eee' },
   modalCloseText: { color: '#667eea', fontSize: 16, fontWeight: '600' },
+  logoImage: { width: 70, height: 70, resizeMode: 'contain' },
+
 });

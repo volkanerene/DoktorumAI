@@ -28,7 +28,14 @@ import NotificationService from '../services/NotificationService';
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width, height } = Dimensions.get('window');
+type Gender = 'male' | 'female' | 'other';
+  const BG_COLOR = '#6B75D6';      // yumuşak mavi
 
+const DEFAULT_AVATAR: Record<Gender, string> = {
+  male:   'https://www.prokoc2.com/assets/avatars/male.png',
+  female: 'https://www.prokoc2.com/assets/avatars/female.png',
+  other:  'https://www.prokoc2.com/assets/avatars/male.png',
+};
 const QuickActionCard = React.memo(
   ({ title, subtitle, icon, color, onPress, wide = false }: any) => {
     return (
@@ -88,8 +95,10 @@ const healthTips: HealthTip[] = [
   },
 ];
 
-export default function HomeScreen({ route, navigation }: HomeScreenProps) {
-  const { userId, userName } = route.params;
+export default function HomeScreen({ route, navigation }: any) {
+  const userId = route.params?.userId || route.params?.userId;
+  const userName = route.params?.userName || route.params?.userName || 'User';
+
   const [profilePhoto, setProfilePhoto] = useState<string>('');
   const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -106,7 +115,7 @@ const carouselRef = useRef<ScrollView>(null);  const { t, language } = useLangua
   useEffect(() => {
     const id = setInterval(() => {
       const next = (currentTip + 1) % healthTips.length;
-      carouselRef.current?.scrollTo({ x: next * width, animated: true });
+      carouselRef.current?.scrollTo({ x: next * width - 32, animated: true });
       setCurrentTip(next);
     }, 5000);
     return () => clearInterval(id);
@@ -143,9 +152,11 @@ const carouselRef = useRef<ScrollView>(null);  const { t, language } = useLangua
         axios.get(`${SERVER_URL}?action=getProfile&user_id=${userId}`),
         axios.get(`${SERVER_URL}?action=getHistory&user_id=${userId}`),
       ]);
-      if (profileRes.data.success && profileRes.data.profile) {
-        setProfilePhoto(profileRes.data.profile.profile_photo || '');
-      }
+if (profileRes.data.success && profileRes.data.profile) {
+  const gender: Gender = profileRes.data.profile.gender ?? 'other';
+  const url = profileRes.data.profile.profile_photo || DEFAULT_AVATAR[gender];
+  setProfilePhoto(url);
+}
       if (historyRes.data.success) {
         setHistoryData(historyRes.data.history);
       }
@@ -237,12 +248,10 @@ const carouselRef = useRef<ScrollView>(null);  const { t, language } = useLangua
 
   /* -------------------------  UI  -------------------------- */
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#6B75D6','#46B168']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientBackground}>
+   <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
+
+
+          
         {loading && (
           <ActivityIndicator
             style={{ position: 'absolute', top: height / 2 - 20, alignSelf: 'center', zIndex: 10 }}
@@ -285,10 +294,10 @@ const carouselRef = useRef<ScrollView>(null);  const { t, language } = useLangua
 
   {/* PROFİL FOTO – sabit sağ üst */}
   <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId })}>
-    <Image
-      source={{ uri: profilePhoto || 'https://via.placeholder.com/80/eee/667eea?text=👤' }}
-      style={styles.profileImage}
-    />
+<Image
+  source={{ uri: profilePhoto || DEFAULT_AVATAR.other }}
+  style={styles.profileImage}
+/>
   </TouchableOpacity>
 </Animated.View>
 
@@ -439,7 +448,7 @@ const carouselRef = useRef<ScrollView>(null);  const { t, language } = useLangua
             </TouchableOpacity>
           </Modal>
         )}
-      </LinearGradient>
+
     </View>
   );
 }
@@ -490,8 +499,11 @@ upgradeBadge: {      /* position ABSOLUTE satırını sil */
 upgradeBadgeText: { fontSize: 12, color: '#FFD700', fontWeight: '600' },
 
 /* Sağlık Asistanım geniş kart */
-wideCard: { width: width - 56 },   /* 56 = 2*padding + gap  */
-
+ wideCard: {
+   width: width - 56,
+   alignSelf: 'center',
+   marginBottom: 16,                 /* alt kartlara mesafe */
+ },
 
   /* Quick Actions */
   quickActionsContainer: { paddingHorizontal: 16, marginBottom: 8 },
@@ -521,9 +533,9 @@ wideCard: { width: width - 56 },   /* 56 = 2*padding + gap  */
   datePickerTitle: { fontSize: 18, fontWeight: '600', color: '#333' },
   dateConfirmButton: { backgroundColor: '#667eea', marginHorizontal: 16, marginTop: 16, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   dateConfirmText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  tipWrapper: { height: 70 },            // yeni
+  tipWrapper: { height: 70, paddingHorizontal: 16, marginBottom: 16 },
 tipCard: {
-  width,                                // her sayfa tam ekran
+  width: width - 32,                                // her sayfa tam ekran
   flexDirection: 'row',
   alignItems: 'center',
   gap: 12,

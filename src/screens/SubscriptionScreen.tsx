@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Dimensions,
   NativeModules,
@@ -20,233 +19,196 @@ import { useLanguage } from '../context/LanguageContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import * as Animatable from 'react-native-animatable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Purchases from 'react-native-purchases';      // RevenueCat SDK
 
-type SubscriptionScreenProps = StackScreenProps<RootStackParamList, 'Subscription'>;
+type Props = StackScreenProps<RootStackParamList, 'Subscription'>;
 
 const { width } = Dimensions.get('window');
-export default function SubscriptionScreen({ route, navigation }: SubscriptionScreenProps) {
+
+export default function SubscriptionScreen({ route, navigation }: Props) {
+  /* ------------------------------------------------------------------ */
+  /*                             STATE / CTX                            */
+  /* ------------------------------------------------------------------ */
   const { userId, userName } = route.params;
   const { t, language } = useLanguage();
-  const { activateTrial } = useSubscription();
-  const [loading, setLoading] = useState(false);
-  const [freeModalVisible, setFreeModalVisible] = useState(false);
+  const { activateTrial } = useSubscription();   // activateTrial(): Promise<void>
+  const [loading, setLoading]       = useState(false);
+  const [freeModal, setFreeModal]   = useState(false);
 
-  // Fiyat belirleme için locale kontrolü ekle
+  /* ------------------------------------------------------------------ */
+  /*                          PRICE & FEATURES                          */
+  /* ------------------------------------------------------------------ */
+  const priceInfo = React.useMemo(() => {
+    const locale = NativeModules.I18nManager?.localeIdentifier || 'en';
+    const isTR   = locale.toLowerCase().includes('tr');
+    return { currency: isTR ? '₺' : '$', amount: isTR ? '99' : '5' };
+  }, []);
 
-    const getPrice = () => {
-      // Türkiye için kontrol
-      const locale = NativeModules.I18nManager?.localeIdentifier || 'en';
-      const isTurkey = locale.toLowerCase().includes('tr');
-      
-      return {
-        currency: isTurkey ? '₺' : '$',
-        amount: isTurkey ? '99' : '5',
-        text: isTurkey ? t('subscription.pricePerMonth') : t('subscription.pricePerMonthGlobal')
-      };
-    };
-    const priceInfo = getPrice();
   const features = [
-    { icon: 'all-inclusive', text: t('subscription.features.unlimited') },
-    { icon: 'image', text: t('subscription.features.imageAnalysis') },
-    { icon: 'mic', text: t('subscription.features.voiceMessages') },
-    { icon: 'medical-services', text: t('subscription.features.allDoctors') },
-    { icon: 'star', text: t('subscription.features.priority') },
-    { icon: 'notifications-active', text: t('subscription.features.notifications') },
+    { icon: 'all-inclusive',        text: t('subscription.features.unlimited')       },
+    { icon: 'image',                text: t('subscription.features.imageAnalysis')   },
+    { icon: 'mic',                  text: t('subscription.features.voiceMessages')   },
+    { icon: 'medical-services',     text: t('subscription.features.allDoctors')      },
+    { icon: 'star',                 text: t('subscription.features.priority')        },
+    { icon: 'notifications-active', text: t('subscription.features.notifications')   },
   ];
 
-  const price = language === 'tr' ? '₺99' : '$5';
-
+  /* ------------------------------------------------------------------ */
+  /*                       REVENUECAT 7-GÜNLÜK TRIAL                    */
+  /* ------------------------------------------------------------------ */
   const handleStartTrial = async () => {
-    setLoading(true);
     try {
-      // Here you would integrate with RevenueCat or your payment provider
-      // For now, we'll just activate the trial locally
-      await activateTrial();
-      
-      Alert.alert(
-        t('common.success'),
-        t('subscription.trialInfo'),
-        [
-          {
-            text: t('common.ok'),
-            onPress: () => navigateToHome(),
-          },
-        ]
+      setLoading(true);
+
+      const offerings   = await Purchases.getOfferings();
+      const trialPkg    = offerings.current?.availablePackages.find(
+        p => p.identifier === 'weekly_trial',   // RevenueCat’ta tanımladığınız paket ID
       );
-    } catch (error) {
-      Alert.alert(t('common.error'), t('common.error'));
+      if (!trialPkg) throw new Error('Package not found');
+
+      await Purchases.purchasePackage(trialPkg); // Satın alım ekranı açılır
+      await activateTrial();                     // Context içinde premium flag’i set et
+      goHome();
+    } catch (e: any) {
+      if (!e.userCancelled) console.warn('Purchase error ➜', e);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleContinueFree = async () => {
-  setFreeModalVisible(true);
-};
- const confirmFreePlan = async () => {
-   await AsyncStorage.setItem(`subscription_shown_${userId}`, 'true');
-   setFreeModalVisible(false);
-   navigateToHome();
- };
+  const handleRestore = async () => {
+    try {
+      setLoading(true);
+      await Purchases.restorePurchases();
+      await activateTrial();     // Premium durumunu yine işleyin
+      goHome();
+    } catch (e) {
+      console.warn('Restore error', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const navigateToHome = () => {
+  /* ------------------------------------------------------------------ */
+  /*                     FREE (Şimdi Değil) AKIŞI                       */
+  /* ------------------------------------------------------------------ */
+  const handleContinueFree = () => setFreeModal(true);
+
+  const confirmFreePlan = async () => {
+    await AsyncStorage.setItem(`subscription_shown_${userId}`, 'true');
+    setFreeModal(false);
+    goHome();
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*                              NAVIGATION                            */
+  /* ------------------------------------------------------------------ */
+  const goHome = () =>
     navigation.reset({
       index: 0,
       routes: [{ name: 'Home', params: { userId, userName } }],
     });
-  };
 
-return (
-  <SafeAreaView style={styles.container}>
-    <LinearGradient
-      colors={['#667eea', '#764ba2']}
-      style={styles.gradient}
-    >
-      {/* X (kapat) */}
-      <View style={styles.closeButtonContainer}>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={handleContinueFree}
-        >
-          <MaterialIcons name="close" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+  /* ------------------------------------------------------------------ */
+  /*                               RENDER                               */
+  /* ------------------------------------------------------------------ */
+  return (
+      <><LinearGradient colors={['#6B75D6','#46B168']} style={styles.gradient}>
+      <SafeAreaView style={styles.container}>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+        {/* ────────── KAPAT (X) ────────── */}
 
-        {/* HEADER  -------------------------------------------------- */}
-        <Animatable.View
-          animation="fadeInDown"
-          duration={800}
-          style={styles.header}
-        >
-          <View style={styles.crownContainer}>
-            <MaterialIcons
-              name="workspace-premium"
-              size={80}
-              color="#FFD700"
-            />
+
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.closeButtonContainer}>
+            <TouchableOpacity style={styles.closeButton} onPress={handleContinueFree}>
+              <MaterialIcons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.title}>{t('subscription.title')}</Text>
-          <Text style={styles.subtitle}>{t('subscription.subtitle')}</Text>
-        </Animatable.View>
+          {/* ────────── HEADER ────────── */}
+          <Animatable.View animation="fadeInDown" duration={800} style={styles.header}>
+            <View style={styles.crownContainer}>
+              <MaterialIcons name="workspace-premium" size={80} color="#FFD700" />
+            </View>
+            <Text style={styles.title}>{t('subscription.title')}</Text>
+            <Text style={styles.subtitle}>{t('subscription.subtitle')}</Text>
+          </Animatable.View>
 
-        {/* PRICE CARD  ---------------------------------------------- */}
-        <Animatable.View
-          animation="fadeInUp"
-          duration={800}
-          delay={200}
-          style={styles.priceCard}
-        >
-          <View style={styles.trialBadge}>
-            <Text style={styles.trialBadgeText}>
-              {t('subscription.trialInfo')}
-            </Text>
+          {/* ────────── PRICE CARD ────────── */}
+          <Animatable.View animation="fadeInUp" duration={800} delay={200} style={styles.priceCard}>
+            <View style={styles.trialBadge}>
+              <Text style={styles.trialBadgeText}>{t('subscription.trialInfo')}</Text>
+            </View>
+
+            <Text style={styles.planTitle}>{t('subscription.monthlyPlan')}</Text>
+
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>{priceInfo.currency}{priceInfo.amount}</Text>
+              <Text style={styles.priceUnit}>/{t('subscription.monthlyPlan').toLowerCase()}</Text>
+            </View>
+
+            <Text style={styles.trialNote}>{t('subscription.trialEnds')}</Text>
+            <Text style={styles.cancelNote}>{t('subscription.cancelAnytime')}</Text>
+          </Animatable.View>
+
+          {/* ────────── ÖZELLİKLER ────────── */}
+          <Animatable.View animation="fadeInUp" duration={800} delay={400} style={styles.featuresContainer}>
+            <Text style={styles.featuresTitle}>{t('subscription.features.title')}</Text>
+            {features.map((f, i) => (
+              <Animatable.View key={i} animation="fadeInLeft" duration={600} delay={600 + i * 100} style={styles.featureItem}>
+                <View style={styles.featureIcon}>
+                  <MaterialIcons name={f.icon} size={24} color="#667eea" />
+                </View>
+                <Text style={styles.featureText}>{f.text}</Text>
+              </Animatable.View>
+            ))}
+          </Animatable.View>
+
+          {/* ────────── BUTONLAR ────────── */}
+          <Animatable.View animation="fadeInUp" duration={800} delay={1000} style={styles.buttonContainer}>
+            {/* 7-gün ücretsiz deneme */}
+            <TouchableOpacity style={styles.trialButton} onPress={handleStartTrial} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.trialButtonText}>{t('subscription.startTrial')}</Text>}
+            </TouchableOpacity>
+
+            {/* Satın alım geri yükle */}
+            <TouchableOpacity style={styles.restoreButton} onPress={handleRestore}>
+              <Text style={styles.restoreButtonText}>{t('subscription.restorePurchases')}</Text>
+            </TouchableOpacity>
+
+            {/* Ücretsiz devam et */}
+            <TouchableOpacity style={styles.freeButton} onPress={handleContinueFree}>
+              <Text style={styles.freeButtonText}>{t('subscription.notNow')}</Text>
+            </TouchableOpacity>
+          </Animatable.View>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient><Modal visible={freeModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <MaterialIcons name="sentiment-satisfied-alt" size={60} color="#667eea" />
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalTitle}>{t('subscription.freeVersion')}</Text>
+              <Text style={styles.modalSubtitle}>{t('subscription.limitedFeatures')}</Text>
+
+              <TouchableOpacity style={styles.modalPrimary} onPress={confirmFreePlan}>
+                <Text style={styles.modalPrimaryText}>{t('common.ok')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setFreeModal(false)}>
+                <Text style={styles.modalSecondaryText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <Text style={styles.planTitle}>
-            {t('subscription.monthlyPlan')}
-          </Text>
-
-          <View style={styles.priceContainer}>
-            <Text style={styles.price}>
-              {priceInfo.currency}
-              {priceInfo.amount}
-            </Text>
-            <Text style={styles.priceUnit}>
-              /{t('subscription.monthlyPlan').toLowerCase()}
-            </Text>
-          </View>
-
-          <Text style={styles.trialNote}>
-            {t('subscription.trialEnds')}
-          </Text>
-          <Text style={styles.cancelNote}>
-            {t('subscription.cancelAnytime')}
-          </Text>
-        </Animatable.View>
-
-        {/* FEATURES  ------------------------------------------------ */}
-        <Animatable.View
-          animation="fadeInUp"
-          duration={800}
-          delay={400}
-          style={styles.featuresContainer}
-        >
-          <Text style={styles.featuresTitle}>
-            {t('subscription.features.title')}
-          </Text>
-
-          {features.map((feature, index) => (
-            <Animatable.View
-              key={index}
-              animation="fadeInLeft"
-              duration={600}
-              delay={600 + index * 100}
-              style={styles.featureItem}
-            >
-              <View style={styles.featureIcon}>
-                <MaterialIcons
-                  name={feature.icon}
-                  size={24}
-                  color="#667eea"
-                />
-              </View>
-              <Text style={styles.featureText}>{feature.text}</Text>
-            </Animatable.View>
-          ))}
-        </Animatable.View>
-
-        {/* BUTTONS  ------------------------------------------------- */}
-        <Animatable.View
-          animation="fadeInUp"
-          duration={800}
-          delay={1000}
-          style={styles.buttonContainer}
-        >
-          {/* Ücretsiz deneme başlat */}
-          <TouchableOpacity
-            style={styles.trialButton}
-            onPress={handleStartTrial}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.trialButtonText}>
-                {t('subscription.startTrial')}
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Satın alımları geri yükle */}
-          <TouchableOpacity
-            style={styles.restoreButton}
-            onPress={() => {}}
-          >
-            <Text style={styles.restoreButtonText}>
-              {t('subscription.restorePurchases')}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Şimdi değil / Ücretsiz devam et */}
-          <TouchableOpacity
-            style={styles.freeButton}
-            onPress={handleContinueFree}
-          >
-            <Text style={styles.freeButtonText}>
-              {t('subscription.notNow')}
-            </Text>
-          </TouchableOpacity>
-        </Animatable.View>
-      </ScrollView>
-    </LinearGradient>
-  </SafeAreaView>
-);
+        </View>
+      </Modal></>
+    
+  );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -262,12 +224,15 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   closeButton: {
+    top: 50,
+    right: 20,
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   scrollContent: {
     flexGrow: 1,

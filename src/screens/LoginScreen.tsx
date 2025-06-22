@@ -16,13 +16,14 @@ import {
   ScrollView,
   StatusBar,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { GoogleSignin, statusCodes} from '@react-native-google-signin/google-signin';
+import { GoogleSignin, isSuccessResponse, statusCodes} from '@react-native-google-signin/google-signin';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
 import SHA256 from 'crypto-js/sha256';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,6 +34,7 @@ type LoginScreenProps = StackScreenProps<RootStackParamList, 'Login'>;
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width: W, height: H } = Dimensions.get('window');
+const Logo = require('../assets/logo-icon.png');
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
@@ -115,118 +117,259 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     ).start();
   };
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert(t('common.error'), t('auth.emailRequired') + ' ' + t('auth.passwordRequired'));
-      return;
-    }
-    
-    setLoading(true);
+// 🔄 TEK sürüm kalsın
+const handleLogin = async () => {
+  // 1) Form doğrulama
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!email.trim()) {
+    Alert.alert(t('common.error'), t('auth.emailRequired'));
+    return;
+  }
+  if (!emailRegex.test(email)) {
+    Alert.alert(t('common.error'), 'Geçerli bir e-posta adresi girin');
+    return;
+  }
+  if (!password || password.length < 6) {
+    Alert.alert(t('common.error'), 'Şifre en az 6 karakter olmalıdır');
+    return;
+  }
+
+   setLoading(true);
     try {
-      const response = await axios.post(`${SERVER_URL}?action=login`, { email, password, language });
-      if (response.data.success) {
-        await AsyncStorage.setItem(
-          'userData',
-          JSON.stringify({ 
-            userId: response.data.user_id, 
-            userName: response.data.name, 
-            userType: 'registered' 
-          })
-        );
-        Alert.alert(t('common.success'), t('auth.loginSuccess'));
-        const onboardingCompleted = await AsyncStorage.getItem(`onboarding_completed_${response.data.user_id}`);
-        if (!onboardingCompleted) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Onboarding', params: { userId: response.data.user_id, userName: response.data.name } }],
-          });
+        const response = await axios.post(`${SERVER_URL}?action=login`, { 
+            email, 
+            password, 
+            language 
+        });
+        
+        if (response.data.success) {
+            await AsyncStorage.setItem(
+                'userData',
+                JSON.stringify({ 
+                    userId: String(response.data.user_id), 
+                    userName: response.data.name, 
+                    userType: 'registered' 
+                })
+            );
+            
+            Alert.alert(t('common.success'), t('auth.loginSuccess'));
+            
+            // Backend'den gelen onboarding durumunu kontrol et
+            if (!response.data.has_completed_onboarding) {
+                navigation.reset({
+                    index: 0,
+                    routes: [{ 
+                        name: 'Onboarding', 
+                        params: { 
+                            userId: String(response.data.user_id), 
+                            userName: response.data.name 
+                        } 
+                    }],
+                });
+            } else {
+                // Subscription kontrolü için önce subscription shown kontrolü yap
+                const subscriptionShown = await AsyncStorage.getItem(`subscription_shown_${response.data.user_id}`);
+                
+                if (!subscriptionShown) {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ 
+                            name: 'Subscription', 
+                            params: { 
+                                userId: String(response.data.user_id), 
+                                userName: response.data.name 
+                            } 
+                        }],
+                    });
+                } else {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ 
+                            name: 'Home', 
+                            params: { 
+                                userId: String(response.data.user_id), 
+                                userName: response.data.name 
+                            } 
+                        }],
+                    });
+                }
+            }
         } else {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Home', params: { userId: response.data.user_id, userName: response.data.name } }],
-          });
+            Alert.alert(t('common.error'), response.data.error || t('auth.loginError'));
         }
-      } else {
-        Alert.alert(t('common.error'), response.data.error || t('auth.loginError'));
-      }
-    } catch (error) {
-      Alert.alert(t('common.error'), t('auth.serverError'));
-    } finally {
-      setLoading(false);
+  } catch (error: any) {
+    console.error('Login error:', error);
+
+    if (error.code === 'ECONNABORTED') {
+      Alert.alert(t('common.error'), 'Bağlantı zaman aşımına uğradı');
+    } else if (error.response) {
+      Alert.alert(
+        t('common.error'),
+        error.response.data?.error || `Server error: ${error.response.status}`
+      );
+    } else if (error.request) {
+      Alert.alert(
+        t('common.error'),
+        'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.'
+      );
+    } else {
+      Alert.alert(t('common.error'), error.message || t('auth.serverError'));
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleForgotPassword = () => navigation.navigate('PasswordReset');
 
-  const handleGuestLogin = async () => {
-    setLoading(true);
-    try {
-      const guestId = 'guest_' + Date.now();
-      const guestName = t('common.guest');
+const handleGuestLogin = async () => {
+  setLoading(true);
+  try {
+    const guestId = 'guest_' + Date.now();
+    const guestName = t('common.guest');
 
+    // Önce backend'e kaydet
+    const response = await axios.post(`${SERVER_URL}?action=guestLogin`, {
+      guest_id: guestId,
+      guest_name: guestName,
+      language,
+    });
+
+    if (response.data.success) {
+      // AsyncStorage'a kaydet
       await AsyncStorage.setItem(
         'userData',
         JSON.stringify({
-          userId: guestId,
+          userId: response.data.user_id, // Backend'den gelen gerçek user ID
           userName: guestName,
           userType: 'guest',
         })
       );
+      
       Alert.alert(t('common.success'), t('auth.guestSuccess'));
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Home', params: { userId: guestId, userName: guestName } }],
+        routes: [{ name: 'Home', params: { userId: String(response.data.user_id), userName: guestName } }],
       });
-    } catch {
-      Alert.alert(t('common.error'), t('auth.guestError'));
-    } finally {
-      setLoading(false);
+    } else {
+      Alert.alert(t('common.error'), response.data.error || t('auth.guestError'));
     }
-  };
+  } catch (error: any) {
+    console.error('Guest login error:', error);
+    Alert.alert(
+      t('common.error'), 
+      error.response?.data?.error || error.message || t('auth.guestError')
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const handleGoogleLogin = async () => {
-    try {
-      await GoogleSignin.hasPlayServices();
-      const res = await GoogleSignin.signIn();
-      const { idToken, user } = res;   
-      if (!idToken) idToken = (await GoogleSignin.getTokens()).idToken;
-      
-      if (!idToken) {
-        Alert.alert(t('common.error'), 'Google ID token error');
-        return;
-      }
-      
-      const payload = {
-        provider: 'google',
-        token: idToken,
-        name: user.name || '',
-        email: user.email || '',
-        language,
-      };
-      
-      const apiRes = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
-      
-      if (apiRes.data.success) {
-        await AsyncStorage.setItem(
-          'userData',
-          JSON.stringify({ userId: apiRes.data.user_id, userName: apiRes.data.name, userType: 'social' })
-        );
-        Alert.alert(t('common.success'), `${t('common.welcome')}, ${apiRes.data.name}`);
-        navigation.reset({
-          index: 0,
-          routes: [
-            { name: 'Home', params: { userId: apiRes.data.user_id, userName: apiRes.data.name } },
-          ],
-        });
-      } else {
-        Alert.alert(t('common.error'), apiRes.data.error || t('auth.loginError'));
-      }
-    } catch (err: any) {
-      if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
-        Alert.alert(t('common.error'), t('auth.loginError'));
-      }
+const handleGoogleLogin = async () => {
+  try {
+    await GoogleSignin.hasPlayServices();
+
+    // ① Oturum aç
+    const res = await GoogleSignin.signIn();
+
+    // ② Başarılı oturum kontrolü –> tip narrowing
+    if (!isSuccessResponse(res)) {
+      // Kullanıcı iptal ettiyse sessizce çık
+      return;
     }
-  };
+
+    // ③ Gerekli alanlar artık res.data içinde
+    const { idToken, serverAuthCode, user } = res.data;
+
+    // refresh-token almayı tercih ediyorsanız serverAuthCode kullanın
+    const tokenToSend = idToken ?? serverAuthCode;
+    if (!tokenToSend) {
+      Alert.alert(t('common.error'), 'Google token alınamadı');
+      return;
+    }
+
+    // ④ Sunucuya gönderilecek payload
+    const payload = {
+      provider: 'google',
+      token: tokenToSend,
+      name: user.name ?? '',
+      email: user.email ?? '',
+      language,
+    };
+
+       const apiRes = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
+        
+        if (apiRes.data.success) {
+            await AsyncStorage.setItem(
+                'userData',
+                JSON.stringify({ 
+                    userId: String(apiRes.data.user_id), 
+                    userName: apiRes.data.name, 
+                    userType: 'social' 
+                })
+            );
+            
+            // Profil kontrolü yap
+            const profileRes = await axios.get(`${SERVER_URL}?action=getProfile&user_id=${apiRes.data.user_id}`);
+            
+            let hasCompletedOnboarding = false;
+            if (profileRes.data.success && profileRes.data.profile?.answers) {
+                const answers = profileRes.data.profile.answers;
+                // Zorunlu alanları kontrol et
+                if (answers.birthDate && answers.gender) {
+                    hasCompletedOnboarding = true;
+                }
+            }
+            
+            Alert.alert(t('common.success'), `${t('common.welcome')}, ${apiRes.data.name}`);
+            
+            if (!hasCompletedOnboarding) {
+                navigation.reset({
+                    index: 0,
+                    routes: [{ 
+                        name: 'Onboarding', 
+                        params: { 
+                            userId: String(apiRes.data.user_id), 
+                            userName: apiRes.data.name 
+                        } 
+                    }],
+                });
+            } else {
+                const subscriptionShown = await AsyncStorage.getItem(`subscription_shown_${apiRes.data.user_id}`);
+                
+                if (!subscriptionShown) {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ 
+                            name: 'Subscription', 
+                            params: { 
+                                userId: String(apiRes.data.user_id), 
+                                userName: apiRes.data.name 
+                            } 
+                        }],
+                    });
+                } else {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ 
+                            name: 'Home', 
+                            params: { 
+                                userId: String(apiRes.data.user_id), 
+                                userName: apiRes.data.name 
+                            } 
+                        }],
+                    });
+                }
+            }
+        }
+    } catch (err: any) {
+    // Hata kodlarını kendi isteğinize göre ayrıştırın
+    if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
+      Alert.alert(t('common.error'), err.message || t('auth.loginError'));
+    }
+  }
+};
 
   const handleAppleLogin = async () => {
     try {
@@ -395,7 +538,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                   colors={['#fff', '#f0f0f0']}
                   style={styles.logo}
                 >
-                  <MaterialCommunityIcons name="medical-bag" size={50} color="#667eea" />
+              <Image source={Logo} style={styles.logoImage} />
                 </LinearGradient>
               </View>
               
@@ -728,4 +871,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
+  logoImage: { width: 70, height: 70, resizeMode: 'contain' },
+
 });

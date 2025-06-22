@@ -11,13 +11,17 @@ import {
   Image,
   Platform,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useLanguage } from '../context/LanguageContext';
-
+import LinearGradient from 'react-native-linear-gradient';
+const Logo = require('../assets/logo-icon.png');
 const { width: W, height: H } = Dimensions.get('window');
-
+// Arka plan için sakin, “sağlık” hissi veren birkaç öneri — comment satırı:
+  const BG_COLOR = '#6B75D6';      // yumuşak mavi
+//  const BG_COLOR = '#A0AEC0';      // nötr gri-mavi
+//const BG_COLOR = '#5BC0BE';          // seçili varsayılan
 export default function FirstScreen({ navigation }: any) {
   const { t } = useLanguage();
   
@@ -25,8 +29,6 @@ export default function FirstScreen({ navigation }: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.3)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   
   // Floating icons için animasyonlar
   const float1 = useRef(new Animated.Value(0)).current;
@@ -61,30 +63,8 @@ export default function FirstScreen({ navigation }: any) {
       }),
     ]).start();
 
-    // Dönen logo animasyonu
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 10000,
-        useNativeDriver: true,
-      })
-    ).start();
 
-    // Pulse animasyonu
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+
 
     // Floating animasyonları
     startFloatingAnimations();
@@ -153,10 +133,7 @@ export default function FirstScreen({ navigation }: any) {
     ).start();
   };
 
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+
 
   return (
         <>
@@ -165,12 +142,8 @@ export default function FirstScreen({ navigation }: any) {
         translucent
         backgroundColor="transparent"
       />
-    <LinearGradient
-      colors={['#6B75D6','#46B168']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+    <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
+
       <SafeAreaView style={styles.safeArea}>
         {/* Floating Background Icons */}
         <Animated.View
@@ -241,33 +214,17 @@ export default function FirstScreen({ navigation }: any) {
                 opacity: fadeAnim,
                 transform: [
                   { scale: scaleAnim },
-                  { rotate: spin },
                 ],
               },
             ]}
           >
-            <LinearGradient
-              colors={['#fff', '#f0f0f0']}
-              style={styles.logoGradient}
-            >
-              <MaterialCommunityIcons name="medical-bag" size={60} color="#667eea" />
-            </LinearGradient>
+            <View style={styles.logoGradient}>
+              {/* düz beyaz yuvarlak */}
+              <Image source={Logo} style={styles.logoImage} />
+           </View>
           </Animated.View>
 
-          {/* Pulse Circle */}
-          <Animated.View
-          pointerEvents="none"
-            style={[
-              styles.pulseCircle,
-              {
-                transform: [{ scale: pulseAnim }],
-                opacity: fadeAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.3],
-                }),
-              },
-            ]}
-          />
+
 
           {/* Title */}
           <Animated.View
@@ -280,11 +237,11 @@ export default function FirstScreen({ navigation }: any) {
               },
             ]}
           >
-            <Text style={styles.appName}>Sağlık Asistanım AI</Text>
+            <Text style={styles.appName}>{t('first.banner')}</Text>
             <View style={styles.titleBadge}>
               <Text style={styles.titleBadgeText}>Yapay Zeka Destekli</Text>
             </View>
-            <Text style={styles.title}>Sağlığınız Güvende</Text>
+            <Text style={styles.title}>{t('first.title')}</Text>
             <Text style={styles.subtitle}>
               7/24 yapay zeka destekli sağlık asistanınız
             </Text>
@@ -327,27 +284,26 @@ export default function FirstScreen({ navigation }: any) {
               },
             ]}
           >
-            <TouchableOpacity
-              style={styles.startButton}
-              onPress={() => navigation.navigate('Signup')}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={['#C8FF00', '#A8E000']}
-                style={styles.buttonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Text style={styles.startButtonText}>Başla</Text>
-                <MaterialIcons name="arrow-forward" size={24} color="#000" />
-              </LinearGradient>
-            </TouchableOpacity>
+  <TouchableOpacity
+    style={styles.startFab}
+    onPress={() => navigation.navigate('Signup')}
+    activeOpacity={0.8}
+  >
+    <LinearGradient
+      colors={['#C8FF00', '#A8E000']}
+      style={styles.startFabGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <MaterialIcons name="arrow-forward-ios" size={32} color="#000" />
+    </LinearGradient>
+  </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.loginLink}
               onPress={() => navigation.navigate('Login')}
             >
-              <Text style={styles.loginLinkText}>Zaten hesabım var</Text>
+              <Text style={styles.loginLinkText}>{t('auth.hasAccount')}</Text>
             </TouchableOpacity>
           </Animated.View>
 
@@ -357,7 +313,7 @@ export default function FirstScreen({ navigation }: any) {
           </View>
         </View>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
     </>
   );
 }
@@ -386,11 +342,12 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
     elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   pulseCircle: {
     position: 'absolute',
@@ -474,15 +431,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 18,
+    paddingVertical: 22,
     paddingHorizontal: 40,
     borderRadius: 30,
     gap: 10,
   },
+logoImage: { width: 70, height: 70, resizeMode: 'contain' },
   startButtonText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: '700',
+    color: '#000',          /* siyah görünür */
   },
   loginLink: {
     paddingVertical: 10,
@@ -516,5 +474,22 @@ const styles = StyleSheet.create({
     bottom: -50,
     left: -W * 0.2,
     opacity: 0.1,
+  },
+    startFab: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    marginBottom: 20,
+    elevation: 8,
+    shadowColor: '#C8FF00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  startFabGradient: {
+    flex: 1,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

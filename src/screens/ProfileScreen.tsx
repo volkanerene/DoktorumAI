@@ -27,11 +27,13 @@ import { useLanguage } from '../context/LanguageContext';
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width } = Dimensions.get('window');
-const DEFAULT_AVATAR = {
-  male:    'https://www.prokoc2.com/assets/avatars/male.png',
-  female:  'https://www.prokoc2.com/assets/avatars/female.png',
-  other:   'https://www.prokoc2.com/assets/avatars/male.png', // fallback
-} as const;
+type Gender = 'male' | 'female' | 'other';
+
+const DEFAULT_AVATAR: Record<Gender, string> = {
+  male:   'https://www.prokoc2.com/assets/avatars/male.png',
+  female: 'https://www.prokoc2.com/assets/avatars/female.png',
+  other:  'https://www.prokoc2.com/assets/avatars/male.png',
+};
 // Sağlık anketi soruları
 const QUESTIONS = [
   /* ... aynı liste ... */
@@ -81,11 +83,11 @@ export default function ProfileScreen({ route, navigation }: Props) {
     try {
       const res = await axios.get(`${SERVER_URL}?action=getProfile&user_id=${userId}`);
       if (res.data?.success) {
-      const g = res.data.profile?.gender || 'other';
-      const url = res.data.profile?.profile_photo
-                  ? res.data.profile.profile_photo
-                  : DEFAULT_AVATAR[g];
-      setProfilePhoto(url);
+/* fetchProfile içinde ----------------------------------------- */
+const genderRaw = res.data.profile?.gender ?? 'other';
+const g: Gender = res.data.profile?.gender ?? 'other';
+const url = res.data.profile?.profile_photo || DEFAULT_AVATAR[g];
+setProfilePhoto(url);
         if (Array.isArray(res.data.profile?.answers)) setAnswers(res.data.profile.answers);
       }
     } finally {
@@ -193,7 +195,7 @@ export default function ProfileScreen({ route, navigation }: Props) {
 
   /* -------------------- UI -------------------- */
   return (
-    <LinearGradient colors={['#667eea', '#764ba2', '#f093fb']} style={styles.container}>
+    <LinearGradient  colors={['#6B75D6','#46B168']} style={styles.container}>
         {/*  ➕  yükleniyor overlay */}
   {loading && (
     <View style={styles.loadingOverlay}>

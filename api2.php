@@ -783,6 +783,39 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
                 handleError("loginSocial error: " . $e->getMessage());
             }
 
+            case 'guestLogin':
+    debugLog("guestLogin route");
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $guestId = $input['guest_id'] ?? 'guest_' . time() . '_' . rand(1000, 9999);
+    $guestName = $input['guest_name'] ?? 'Misafir';
+    $language = $input['language'] ?? 'tr';
+    
+    // Misafir kullanıcıyı veritabanına kaydet
+    $email = $guestId . '@guest.local'; // Benzersiz bir email
+    $password = password_hash(uniqid(), PASSWORD_BCRYPT); // Rastgele şifre
+    
+    $stmt = $conn->prepare("INSERT INTO users3 (name, email, password, provider) VALUES (?, ?, ?, 'guest')");
+    $stmt->bind_param("sss", $guestName, $email, $password);
+    
+    if ($stmt->execute()) {
+        $userId = $stmt->insert_id;
+        echo json_encode([
+            "success" => true,
+            "message" => "Guest login successful",
+            "user_id" => $userId,
+            "guest_id" => $guestId,
+            "name" => $guestName,
+            "debug" => $debug
+        ]);
+    } else {
+        echo json_encode([
+            "error" => "Failed to create guest user: " . $stmt->error,
+            "debug" => $debug
+        ]);
+    }
+    $stmt->close();
+    exit;
 // Forgot password – send mail with reset link
 case 'forgotPassword':
     $input = json_decode(file_get_contents('php://input'), true) ?? [];
@@ -975,15 +1008,27 @@ case 'resetPassword':
             exit;
 
         // Login
-        case 'login':
-            debugLog("login route");
-            $input = json_decode(file_get_contents('php://input'), true);
-            if (!isset($input['email'], $input['password'])) {
-                handleError("Email and password required.");
-            }
-            $email = trim($input['email']);
-            $password = trim($input['password']);
-        $language = isset($input['language']) ? $input['language'] : 'tr';
+case 'login':
+    debugLog("login route");
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    // Input validasyonu ekleyin
+    if (!$input) {
+        handleError("Invalid JSON input");
+    }
+    
+    if (!isset($input['email']) || !isset($input['password'])) {
+        handleError("Email and password required");
+    }
+    
+    $email = trim($input['email']);
+    $password = trim($input['password']);
+    $language = isset($input['language']) ? $input['language'] : 'tr';
+    
+    // Email formatını kontrol et
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        handleError("Invalid email format");
+    }
             $stmt = $conn->prepare("SELECT id, name, password FROM users3 WHERE email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
@@ -998,22 +1043,39 @@ case 'resetPassword':
             $user = $result->fetch_assoc();
             $stmt->close();
         
-            if (!verifyPassword($password, $user['password'])) {
-                echo json_encode(["error" => "Invalid email or password.", "debug" => $debug]);
-                exit;
-            }
-        
-            $response = [
-                "success" => true,
-                "message" => "Login successful",
-                "user_id" => $user['id'],
-                "name"    => $user['name'],
-                "debug"   => $debug
-            ];
-            
-            echo json_encode($response);
-            exit;
-
+     if (!verifyPassword($password, $user['password'])) {
+        echo json_encode(["error" => "Invalid email or password.", "debug" => $debug]);
+        exit;
+    }
+    
+    // Profil durumunu kontrol et
+    $profileStmt = $conn->prepare("SELECT answers FROM user_profile WHERE user_id = ?");
+    $profileStmt->bind_param("i", $user['id']);
+    $profileStmt->execute();
+    $profileResult = $profileStmt->get_result();
+    $profile = $profileResult->fetch_assoc();
+    $profileStmt->close();
+    
+    $hasCompletedOnboarding = false;
+    if ($profile && $profile['answers']) {
+        $answers = json_decode($profile['answers'], true);
+        // En azından zorunlu alanların dolu olup olmadığını kontrol et
+        if (isset($answers['birthDate']) && isset($answers['gender'])) {
+            $hasCompletedOnboarding = true;
+        }
+    }
+    
+    $response = [
+        "success" => true,
+        "message" => "Login successful",
+        "user_id" => $user['id'],
+        "name"    => $user['name'],
+        "has_completed_onboarding" => $hasCompletedOnboarding,
+        "debug"   => $debug
+    ];
+    
+    echo json_encode($response);
+    exit;
         // Send message
         case 'sendMessage':
             debugLog("sendMessage route");
