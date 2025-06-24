@@ -2,6 +2,9 @@ export const translations = {
   tr: {
     // Common
     common: {
+      pharmacy: 'Eczaneler',
+      medications: 'İlaçlarım',
+      home: 'Ana Sayfa',
        guest: 'Misafir',
       cancel: 'İptal',
       save: 'Kaydet',  
@@ -624,6 +627,9 @@ modafinil: 'Modafinil',
   en: {
     // Common
     common: {
+      home: 'Home',
+      pharmacy: 'Pharmacies',
+      medications: 'Medications',
       guest: 'Guest',
       cancel: 'Cancel',
       save: 'Save',
@@ -927,6 +933,11 @@ modafinil: 'Modafinil',
         afternoon: 'Good afternoon',
         evening: 'Good evening',
       },
+      goodMorning: 'Good Morning',
+      chooseDate: 'Choose Date',
+      todayStats: "Today's Statistics",
+      noRecentChats: 'No chats yet',
+      startChatting: 'Select an assistant to start chatting',
       goodAfternoon: 'Good Afternoon',
       freePlan: 'Free Plan',
       all: 'All',                  // “Recent Chats → All” button
@@ -951,6 +962,14 @@ modafinil: 'Modafinil',
     
     // Chat screen
     chat: {
+      recordingVoice: 'Speak now...',
+      voiceRecognitionError: 'Voice recognition error',
+      voiceNotAvailable: 'Voice recognition not available',
+      tapToRecord: 'Tap to record',
+      processing: 'Processing...',
+      uploadError: 'Upload failed',
+      imageRequired: 'Please select an image',
+      messageEmpty: 'Message cannot be empty',
       online: 'Online',
       responding: 'Responding',
       startChat: 'Start Chat with',
@@ -998,6 +1017,13 @@ modafinil: 'Modafinil',
     
     // Profile
     profile: {
+           logout: 'Logout',
+      logoutConfirm: 'Are you sure you want to logout?',
+      uploadingPhoto: 'Uploading photo...',
+      photoUploadError: 'Photo upload failed',
+      updateProfile: 'Update Profile',
+      personalInfo: 'Personal Information',
+      healthInfo: 'Health Information',
         myProfile: 'My Profile',
   healthSurvey: 'Health Survey',
   answerPlaceholder: 'Your answer...',
@@ -1034,6 +1060,12 @@ modafinil: 'Modafinil',
     
     // Notifications
     notifications: {
+            permissionRequired: 'Notification permission required',
+      enableNotifications: 'Enable Notifications',
+      notificationSettings: 'Notification Settings',
+      dailyReminders: 'Daily Reminders',
+      medicationAlerts: 'Medication Alerts',
+      healthTips: 'Health Tips',
       dailyTip: 'Daily Health Tip',
       waterReminder: 'Don\'t forget to drink water! 💧',
       stepGoal: 'Did you reach 10,000 steps today? 🚶‍♂️',
@@ -1046,6 +1078,13 @@ modafinil: 'Modafinil',
     
     // Emergency
     emergency: {
+            locationSharing: 'Sharing location...',
+      locationSent: 'Location sent',
+      emergencyContactsEmpty: 'Add emergency contacts',
+      callingEmergency: 'Calling emergency...',
+      sosActivated: 'SOS active',
+      cancelSOS: 'Cancel SOS',
+      confirmCancel: 'Are you sure you want to cancel?',
       title: 'Emergency',
       sos: 'SOS',
       sendEmergency: 'Send Emergency Message',
@@ -1081,6 +1120,11 @@ modafinil: 'Modafinil',
     
     // Lab Analysis
     lab: {
+            uploadingResults: 'Uploading results...',
+      interpretingResults: 'Interpreting results...',
+      normalRange: 'Normal range',
+      criticalValue: 'Critical value',
+      consultDoctor: 'Consult your doctor',
       title: 'Lab Analysis',
       uploadTitle: 'Upload Your Test Results',
       uploadSubtitle: 'Take a photo or select from gallery',
@@ -1108,9 +1152,34 @@ modafinil: 'Modafinil',
       warnings: 'Warnings',
       references: 'References',
     },
+        // Errors - New section
+    errors: {
+      generic: 'An error occurred',
+      network: 'Network connection error',
+      server: 'Server error',
+      unauthorized: 'Authorization error',
+      notFound: 'Not found',
+      timeout: 'Request timed out',
+      offline: 'You are offline',
+    },
+
+    // Validation - New section
+    validation: {
+      required: 'This field is required',
+      email: 'Enter a valid email address',
+      minLength: 'Must be at least {min} characters',
+      maxLength: 'Must be at most {max} characters',
+      number: 'Enter numbers only',
+      phone: 'Enter a valid phone number',
+    },
     
     // Image Analysis
     image: {
+            uploadError: 'Upload error',
+      analysisInProgress: 'Analysis in progress...',
+      noImageSelected: 'No image selected',
+      imageTooLarge: 'Image too large. Please select a smaller image',
+      unsupportedFormat: 'Unsupported format',
       title: 'Image Analysis',
       uploadTitle: 'Upload Your Image',
       uploadSubtitle: 'MRI, X-ray, CT or Ultrasound',
@@ -1145,6 +1214,14 @@ modafinil: 'Modafinil',
     
     // Pharmacy
     pharmacy: {
+            searchLocation: 'Searching location...',
+      locationNotFound: 'Location not found',
+      refreshing: 'Refreshing...',
+      mapView: 'Map View',
+      listView: 'List View',
+      openNow: 'Open now',
+      closed: 'Closed',
+      noPharmaciesNearby: 'No pharmacies found nearby',
       title: 'Duty Pharmacies',
       loading: 'Loading duty pharmacies...',
       locationError: 'Could not get your location. Please check location services.',
@@ -1164,6 +1241,17 @@ modafinil: 'Modafinil',
     
     // Medication Reminder
     medication: {
+            addTime: 'Add Time',
+      removeTime: 'Remove Time',
+      selectTime: 'Select Time',
+      medicationSaved: 'Medication saved',
+      medicationDeleted: 'Medication deleted',
+      medicationUpdated: 'Medication updated',
+      noMedications: 'No medications added yet',
+      reminderSet: 'Reminder set',
+      markAsTaken: 'Mark as taken',
+      markAsSkipped: 'Mark as skipped',
+      allDosesTaken: 'All doses taken',
       title: 'Medication Reminder',
       weeklyAdherence: 'Weekly Adherence',
       adherenceDesc: 'Your medication adherence rate for the last 7 days',

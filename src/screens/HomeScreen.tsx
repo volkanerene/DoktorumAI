@@ -106,7 +106,8 @@ export default function HomeScreen({ route, navigation }: any) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 const [currentTip, setCurrentTip] = useState(0);
-const carouselRef = useRef<ScrollView>(null);  const { t, language } = useLanguage();
+const carouselRef = useRef<ScrollView>(null);  
+const { t, language } = useLanguage();
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -267,9 +268,8 @@ if (profileRes.data.success && profileRes.data.profile) {
 <Animated.View style={[styles.headerContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
   {/* SOL BLOK */}
   <View style={{ flex: 1 }}>
-    <Text style={styles.greeting}>
-      {getGreeting()}, {userName} 👋
-    </Text>
+<Text style={styles.greeting}>{getGreeting()}, {userName} 👋</Text>
+
 
     {/* TARİH + ROZET satırı */}
     <View style={styles.dateRow}>

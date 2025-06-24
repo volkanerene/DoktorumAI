@@ -22,6 +22,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import NotificationService from '../services/NotificationService';
+import { useLanguage } from '../context/LanguageContext';
+
 
 const { width } = Dimensions.get('window');
 
@@ -86,6 +88,8 @@ const FREQUENCY_OPTIONS = [
 
 export default function MedicationReminderScreen({ route, navigation }: MedicationReminderProps) {
   const { userId } = route.params;
+    const { t, language } = useLanguage();
+  
   const [medications, setMedications] = useState<Medication[]>([]);
   const [todayReminders, setTodayReminders] = useState<Reminder[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -187,11 +191,8 @@ export default function MedicationReminderScreen({ route, navigation }: Medicati
     setShowAddModal(false);
     resetForm();
     
-    Alert.alert(
-      'Başarılı',
-      'İlaç hatırlatıcısı eklendi',
-      [{ text: 'Tamam' }]
-    );
+Alert.alert(t('common.success'), t('medication.medicationSaved'));
+
   };
 
   const toggleMedication = (id: string) => {

@@ -355,7 +355,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
     const available = await SpeechService.isAvailable();
     if (!available) {
-      Alert.alert(t('common.error'), 'Voice recognition not available');
+Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
       return;
     }
 
@@ -508,7 +508,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       } as any);
     } catch (e: any) {
       if (e.code !== 'E_PICKER_CANCELLED') {
-        Alert.alert(t('common.error'), 'Failed to capture photo');
+Alert.alert(t('common.error'), t('chat.uploadError'));
       }
     }
   };

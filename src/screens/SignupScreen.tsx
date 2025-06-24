@@ -146,18 +146,18 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
 const handleSignup = async () => {
   // Validasyonlar
   if (!name || name.trim().length < 2) {
-    Alert.alert(t('common.error'), 'İsim en az 2 karakter olmalıdır');
+Alert.alert(t('common.error'), t('auth.nameTooShort'));
     return;
   }
   
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!email || !emailRegex.test(email)) {
-    Alert.alert(t('common.error'), 'Geçerli bir email adresi girin');
+Alert.alert(t('common.error'), t('auth.invalidEmail'));
     return;
   }
   
   if (!password || password.length < 6) {
-    Alert.alert(t('common.error'), 'Şifre en az 6 karakter olmalıdır');
+Alert.alert(t('common.error'), t('auth.passwordTooShort'));
     return;
   }
   
@@ -206,7 +206,7 @@ const handleSignup = async () => {
     if (error.response?.data?.error) {
       Alert.alert(t('common.error'), error.response.data.error);
     } else if (error.request) {
-      Alert.alert(t('common.error'), 'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.');
+Alert.alert(t('common.error'), t('auth.networkError'));
     } else {
       Alert.alert(t('common.error'), error.message || t('auth.serverError'));
     }

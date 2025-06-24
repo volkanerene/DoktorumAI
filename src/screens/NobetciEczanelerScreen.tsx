@@ -21,6 +21,8 @@ import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useLanguage } from '../context/LanguageContext';
+
 
 type RootStackParamList = {
   NobetciEczaneler: undefined;
@@ -53,6 +55,8 @@ const mapStyle = [
 
 export default function NobetciEczanelerScreen({ navigation }: NobetciProps) {
   const [loading, setLoading] = useState(true);
+    const { t, language } = useLanguage();
+  
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
@@ -98,7 +102,7 @@ export default function NobetciEczanelerScreen({ navigation }: NobetciProps) {
         fetchEczaneler(coords);
       },
       error => {
-        Alert.alert('Konum Hatası', 'Konumunuz alınamadı. Lütfen konum servislerinizi kontrol edin.');
+Alert.alert(t('common.error'), t('pharmacy.locationError'));
         setLoading(false);
       },
       { enableHighAccuracy: true, timeout: 20000 }

@@ -131,7 +131,7 @@ setProfilePhoto(url);
         setProfilePhoto(res.data.url);
         Alert.alert(t('common.success'), t('profile.photoUploaded'));
       } else {
-        Alert.alert(t('common.error'), res.data.error || 'Upload error');
+Alert.alert(t('common.error'), t('profile.photoUploadError'));
       }
     } catch {
       Alert.alert(t('common.error'), t('profile.photoError'));

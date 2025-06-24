@@ -127,11 +127,11 @@ const handleLogin = async () => {
     return;
   }
   if (!emailRegex.test(email)) {
-    Alert.alert(t('common.error'), 'Geçerli bir e-posta adresi girin');
+Alert.alert(t('common.error'), t('auth.invalidEmail'));
     return;
   }
   if (!password || password.length < 6) {
-    Alert.alert(t('common.error'), 'Şifre en az 6 karakter olmalıdır');
+Alert.alert(t('common.error'), t('auth.passwordTooShort'));
     return;
   }
 
@@ -202,17 +202,15 @@ const handleLogin = async () => {
     console.error('Login error:', error);
 
     if (error.code === 'ECONNABORTED') {
-      Alert.alert(t('common.error'), 'Bağlantı zaman aşımına uğradı');
+Alert.alert(t('common.error'), t('errors.timeout'));
     } else if (error.response) {
       Alert.alert(
         t('common.error'),
         error.response.data?.error || `Server error: ${error.response.status}`
       );
     } else if (error.request) {
-      Alert.alert(
-        t('common.error'),
-        'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.'
-      );
+Alert.alert(t('common.error'), t('auth.networkError'));
+
     } else {
       Alert.alert(t('common.error'), error.message || t('auth.serverError'));
     }
