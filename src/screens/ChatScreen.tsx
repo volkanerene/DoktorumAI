@@ -42,6 +42,11 @@ const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width, height } = Dimensions.get('window');
 
 type ChatScreenProps = StackScreenProps<RootStackParamList, 'Chat'>;
+interface QuickReply {
+  id: string;
+  text: string;
+  value: string;
+}
 
 interface ChatMessage {
   id: string;
@@ -50,10 +55,13 @@ interface ChatMessage {
   createdAt?: string;
   isLoading?: boolean;
   analysis?: MessageAnalysis;
-  type?: 'text' | 'image' | 'voice';
+  type?: 'text' | 'image' | 'voice' | 'question';
   imageUrl?: string;
   voiceUrl?: string;
   specialistRecommendation?: string[];
+  quickReplies?: QuickReply[];
+  questionNumber?: number;
+  totalQuestions?: number;
 }
 
 interface MessageAnalysis {
@@ -95,7 +103,7 @@ const AuroraBackground = () => (
   </>
 );
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
-  const { userId, assistantName } = route.params;
+  const { userId, assistantName, sessionId: existingSessionId } = route.params;
   const { t, language } = useLanguage();
   const { 
     isPremium, 
@@ -105,11 +113,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     dailyMessageCount,
     dailyMessageLimit 
   } = useSubscription();
-const [showSpecialistRecommendation, setShowSpecialistRecommendation] = useState<string | null>(null);
-const pulseAnim = useRef(new Animated.Value(1)).current;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [userMessage, setUserMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string>(existingSessionId || '');
+  const [isNewConversation, setIsNewConversation] = useState(!existingSessionId);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [showSpecialistRecommendation, setShowSpecialistRecommendation] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+
   const [selectedImage, setSelectedImage] = useState<Asset | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(true);
   const [showReferences, setShowReferences] = useState(false);
@@ -118,6 +130,7 @@ const pulseAnim = useRef(new Animated.Value(1)).current;
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const inputRef = useRef<TextInput>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -152,7 +165,28 @@ const pulseAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     fetchMessages();
     animateIn();
-    
+        if (isNewConversation && isHealthAssistant) {
+      createNewSession();
+    } else if (existingSessionId) {
+      fetchSessionMessages();
+    }
+  }, []);
+
+  // Yeni oturum oluştur
+  const createNewSession = async () => {
+    try {
+      const response = await axios.post(`${SERVER_URL}?action=createChatSession`, {
+        user_id: userId,
+        specialty: assistantName || 'Aile Asistanı',
+      });
+      
+      if (response.data.success) {
+        setSessionId(response.data.session_id);
+        showWelcomeMessage();
+      }
+    } catch (error) {
+      console.error('Session creation error:', error);
+    }
     // Set language for speech service
     SpeechService.setLanguage(language);
     
@@ -210,17 +244,19 @@ const pulseAnim = useRef(new Animated.Value(1)).current;
     ]).start();
   };
 
-const showWelcomeMessage = () => {
-  const welcomeMsg: ChatMessage = {
-    id: 'welcome',
-    sender: 'assistant',
-    text: language === 'tr' 
-      ? 'Merhaba! Ben sizin sağlık asistanınızım. Size nasıl yardımcı olabilirim? Şikayetlerinizi, sorularınızı veya tahlil sonuçlarınızı benimle paylaşabilirsiniz.'
-      : 'Hello! I am your health assistant. How can I help you today? You can share your symptoms, questions, or test results with me.',
-    createdAt: formatTime(new Date().toISOString()),
+  // Hoşgeldin mesajı
+  const showWelcomeMessage = () => {
+    const welcomeMsg: ChatMessage = {
+      id: 'welcome',
+      sender: 'assistant',
+      text: language === 'tr' 
+        ? `Merhaba! Ben sizin sağlık asistanınızım. Size nasıl yardımcı olabilirim?`
+        : `Hello! I am your health assistant. How can I help you today?`,
+      createdAt: formatTime(new Date().toISOString()),
+      type: 'text',
+    };
+    setMessages([welcomeMsg]);
   };
-  setMessages([welcomeMsg]);
-};
 
   const fetchMessages = async () => {
     if (!userId || !assistantName) return;
@@ -269,115 +305,89 @@ const showWelcomeMessage = () => {
     const date = new Date(dt);
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   };
-const handleSend = async () => {
-  if (!canSendMessage) {
-    setShowUpgradeModal(true);
-    return;
-  }
-
-  if (!userId) {
-    Alert.alert(t('common.error'), 'User ID not found.');
-    return;
-  }
-  
-  if (selectedImage) {
-    if (!canSendImage) {
-      Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
-      setShowUpgradeModal(true);
-      return;
-    }
-    await sendImageMessage();
-    return;
-  }
-  
-  if (!userMessage.trim()) {
-    return;
-  }
-
-  const now = new Date();
-  const userMsgObj: ChatMessage = {
-    id: Date.now().toString(),
-    sender: 'user',
-    text: userMessage,
-    createdAt: formatTime(now.toISOString()),
-  };
-
-  const placeholderId = `${Date.now()}-loading`;
-  const loadingBubble: ChatMessage = {
-    id: placeholderId,
-    sender: 'assistant',
-    text: '',
-    isLoading: true,
-    createdAt: '',
-  };
-  
-  setMessages((prev) => [...prev, userMsgObj, loadingBubble]);
-  setUserMessage('');
-  setLoading(true);
-  setShowQuickActions(false);
-  
-  if (!isPremium) {
-    await incrementMessageCount();
-  }
-  
-  setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
-
-  try {
-    // assistantName'i doğru şekilde gönderin
-    const specialtyName = assistantName || 'Aile Asistanı';
+  // Mesaj gönder
+  const handleSend = async (messageText?: string) => {
+    const textToSend = messageText || userMessage;
     
-    const { data } = await axios.post(`${SERVER_URL}?action=sendMessage`, {
-      user_id: String(userId),
-      specialty: specialtyName,
-      user_message: userMessage,
-      language,
-      is_health_assistant: isHealthAssistant,
-    });
+    if (!textToSend.trim()) return;
 
-    if (data.success) {
-      let responseText = data.assistant_reply;
-      let specialistRecommendation: string[] | undefined;
-      
-      // Uzman önerisi varsa parse et
-      try {
-        const parsed = JSON.parse(data.assistant_reply);
-        if (parsed.specialistRecommendation) {
-          specialistRecommendation = parsed.specialistRecommendation;
-          responseText = parsed.text;
-          
-          // İlk uzman önerisini göster
-          if (specialistRecommendation.length > 0) {
+    const userMsgObj: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: textToSend,
+      createdAt: formatTime(new Date().toISOString()),
+    };
+
+    const loadingMsg: ChatMessage = {
+      id: `${Date.now()}-loading`,
+      sender: 'assistant',
+      text: '',
+      isLoading: true,
+    };
+    
+    setMessages(prev => [...prev, userMsgObj, loadingMsg]);
+    setUserMessage('');
+    setLoading(true);
+
+    try {
+      const { data } = await axios.post(`${SERVER_URL}?action=sendMessage`, {
+        user_id: String(userId),
+        session_id: sessionId,
+        specialty: assistantName || 'Aile Asistanı',
+        user_message: textToSend,
+        language,
+        is_health_assistant: isHealthAssistant,
+      });
+
+      if (data.success) {
+        let responseText = data.assistant_reply;
+        let specialistRecommendation: string[] | undefined;
+        let quickReplies: QuickReply[] | undefined;
+        
+        // Parse response
+        try {
+          const parsed = JSON.parse(data.assistant_reply);
+          if (parsed.specialistRecommendation) {
+            specialistRecommendation = parsed.specialistRecommendation;
+            responseText = parsed.text;
             setShowSpecialistRecommendation(specialistRecommendation[0]);
           }
+          
+          // Soru mu kontrol et
+          if (parsed.type === 'question') {
+            quickReplies = parsed.quickReplies;
+            setCurrentQuestionIndex(parsed.questionNumber || 0);
+          }
+        } catch (e) {
+          // Düz metin yanıt
         }
-      } catch (e) {
-        // JSON değilse düz metin olarak kullan
-      }
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === placeholderId
-            ? {
-                ...m,
-                text: responseText,
-                isLoading: false,
-                createdAt: formatTime(now.toISOString()),
-                specialistRecommendation,
-              }
-            : m,
-        ),
-      );
-    } else {
-      throw new Error(data.error || 'Server error');
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === loadingMsg.id
+              ? {
+                  ...m,
+                  text: responseText,
+                  isLoading: false,
+                  createdAt: formatTime(new Date().toISOString()),
+                  specialistRecommendation,
+                  quickReplies,
+                  type: quickReplies ? 'question' : 'text',
+                }
+              : m,
+          ),
+        );
+      } else if (data.limit_reached) {
+        setShowUpgradeModal(true);
+        setMessages(prev => prev.filter(m => m.id !== loadingMsg.id));
+      }
+    } catch (error: any) {
+      setMessages(prev => prev.filter(m => m.id !== loadingMsg.id));
+      Alert.alert(t('common.error'), error.message || 'Failed to send message.');
+    } finally {
+      setLoading(false);
     }
-  } catch (e: any) {
-    console.error('Send message error:', e);
-    setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
-    Alert.alert(t('common.error'), e.message || 'Failed to send message.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const extractReferences = (text: string): Reference[] => {
     const references: Reference[] = [];
@@ -394,65 +404,59 @@ const handleSend = async () => {
     return references;
   };
 
-const handleVoiceMessage = async () => {
-  if (!canSendMessage) {
-    setShowUpgradeModal(true);
-    return;
-  }
-
-  const available = await SpeechService.isAvailable();
-  if (!available) {
-    Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
-    return;
-  }
-
-  if (isListening) {
-    // Durduruluyor
-    await SpeechService.stopListening();
-    setIsListening(false);
-  } else {
-    // Başlatılıyor
-    setIsListening(true);
-    
-    // Pulse animasyonu başlat
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.3,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-    
-    await SpeechService.startListening(
-      (text) => {
-        setUserMessage(text);
-        setIsListening(false);
-        pulseAnim.setValue(1);
-        // Otomatik gönder
-        if (text.trim()) {
-          setTimeout(() => {
-            handleSend();
-          }, 500);
-        }
-      },
-      (error) => {
-        Alert.alert(t('common.error'), error);
-        setIsListening(false);
-        pulseAnim.setValue(1);
-      },
-      (partialText) => {
-        setUserMessage(partialText);
+  // Sesli konuşma
+  const handleVoiceMessage = async () => {
+    if (isRecording) {
+      // Durduruluyor
+      setIsRecording(false);
+      await SpeechService.stopListening();
+      pulseAnim.setValue(1);
+    } else {
+      // Başlatılıyor
+      const available = await SpeechService.isAvailable();
+      if (!available) {
+        Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
+        return;
       }
-    );
-  }
-};
+
+      setIsRecording(true);
+      
+      // Pulse animasyonu
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.3,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      await SpeechService.startListening(
+        (text) => {
+          setUserMessage(text);
+          setIsRecording(false);
+          pulseAnim.setValue(1);
+          if (text.trim()) {
+            handleSend(text);
+          }
+        },
+        (error) => {
+          Alert.alert(t('common.error'), error);
+          setIsRecording(false);
+          pulseAnim.setValue(1);
+        },
+        (partialText) => {
+          setUserMessage(partialText);
+        }
+      );
+    }
+  };
 
 
   const sendImageMessage = async () => {
@@ -536,6 +540,10 @@ const handleVoiceMessage = async () => {
     } finally {
       setLoading(false);
     }
+  };
+  // Hızlı cevap
+  const handleQuickReply = (reply: QuickReply) => {
+    handleSend(reply.value);
   };
 
   const handleImagePickFromGallery = () => {

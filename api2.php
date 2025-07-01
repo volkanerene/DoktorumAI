@@ -63,51 +63,111 @@ function getUserProfile($userId) {
  * @param string $language    The language (tr or en)
  * @param array  $imageData   Optional image data for vision analysis
  */
+// callOpenAI fonksiyonunu güncelle - kullanıcı bilgilerini dahil et
 function callOpenAI($userId, $specialty, $userMessage, $language = 'tr', $imageData = null) {
     global $OPENAI_API_KEY, $debug, $conn;
 
     debugLog("callOpenAI triggered with specialty=$specialty, language=$language, userId=$userId");
 
-    // 1) Fetch user profile
-    $profileData = getUserProfile($userId);
-    
-    // Determine system prompt based on language
-    if ($language === 'en') {
-        $systemPrompt = getEnglishSystemPrompt();
-    } else {
-        $systemPrompt = getTurkishSystemPrompt();
-    }
+    // Kullanıcı profil bilgilerini al
+    $stmt = $conn->prepare("
+        SELECT u.name, u.plan_type, p.*
+        FROM users3 u
+        LEFT JOIN user_profile p ON u.id = p.user_id
+        WHERE u.id = ?
+    ");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $userData = $result->fetch_assoc();
+    $stmt->close();
 
-    // Build messages array
+    // Sistem promptunu kullanıcı bilgileriyle zenginleştir
+    $systemPrompt = $language === 'en' ? getEnglishSystemPrompt() : getTurkishSystemPrompt();
+    
+    // Kullanıcı bilgilerini prompt'a ekle
+    $userContext = "\n\nKULLANICI BİLGİLERİ:\n";
+    $userContext .= "İsim: " . ($userData['display_name'] ?? $userData['name'] ?? 'Kullanıcı') . "\n";
+    
+    if ($userData['birth_date']) {
+        $age = date_diff(date_create($userData['birth_date']), date_create('today'))->y;
+        $userContext .= "Yaş: $age\n";
+    }
+    
+    if ($userData['gender']) {
+        $userContext .= "Cinsiyet: " . $userData['gender'] . "\n";
+    }
+    
+    if ($userData['height'] && $userData['weight']) {
+        $bmi = $userData['weight'] / (($userData['height'] / 100) ** 2);
+        $userContext .= "Boy: " . $userData['height'] . " cm, Kilo: " . $userData['weight'] . " kg (BMI: " . round($bmi, 1) . ")\n";
+    }
+    
+    if ($userData['blood_type']) {
+        $userContext .= "Kan Grubu: " . $userData['blood_type'] . "\n";
+    }
+    
+    if ($userData['important_diseases']) {
+        $userContext .= "Kronik Hastalıklar: " . $userData['important_diseases'] . "\n";
+    }
+    
+    if ($userData['medications']) {
+        $userContext .= "Kullandığı İlaçlar: " . $userData['medications'] . "\n";
+    }
+    
+    if ($userData['allergies']) {
+        $userContext .= "Alerjiler: " . $userData['allergies'] . "\n";
+    }
+    
+    if ($userData['had_surgery'] && $userData['surgeries']) {
+        $userContext .= "Geçirdiği Ameliyatlar: " . $userData['surgeries'] . "\n";
+    }
+    
+    $userContext .= "\nBu bilgileri dikkate alarak kişiselleştirilmiş yanıtlar ver. Kullanıcıya ismiyle hitap et.";
+    
+    $systemPrompt .= $userContext;
+
+    // OpenAI API çağrısı
     $messages = [
         ["role" => "system", "content" => $systemPrompt]
     ];
 
-    // If image data is provided, use GPT-4 Vision
+    // Mesaj geçmişini ekle (aynı session için)
+    if (isset($input['session_id'])) {
+        $historyStmt = $conn->prepare("
+            SELECT role, message 
+            FROM user_chats3 
+            WHERE session_id = ? 
+            ORDER BY created_at ASC 
+            LIMIT 20
+        ");
+        $historyStmt->bind_param("s", $input['session_id']);
+        $historyStmt->execute();
+        $historyResult = $historyStmt->get_result();
+        
+        while ($msg = $historyResult->fetch_assoc()) {
+            if ($msg['role'] !== 'system') {
+                $messages[] = ["role" => $msg['role'], "content" => $msg['message']];
+            }
+        }
+        $historyStmt->close();
+    }
+
+    // Mevcut mesajı ekle
     if ($imageData) {
         $messages[] = [
             "role" => "user",
             "content" => [
-                [
-                    "type" => "text",
-                    "text" => $userMessage
-                ],
-                [
-                    "type" => "image_url",
-                    "image_url" => [
-                        "url" => "data:image/jpeg;base64," . $imageData
-                    ]
-                ]
+                ["type" => "text", "text" => $userMessage],
+                ["type" => "image_url", "image_url" => ["url" => "data:image/jpeg;base64," . $imageData]]
             ]
         ];
-        $model = "gpt-4-turbo";
     } else {
         $messages[] = ["role" => "user", "content" => $userMessage];
-        $model = "gpt-4-turbo";
     }
 
     $postData = [
-        "model" => $model,
+        "model" => "gpt-4-turbo",
         "messages" => $messages,
         "temperature" => 0.7,
         "max_tokens" => 1500
@@ -122,31 +182,20 @@ function callOpenAI($userId, $specialty, $userMessage, $language = 'tr', $imageD
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
-    $response   = curl_exec($ch);
-    $httpCode   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError  = curl_error($ch);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($curlError) {
-        debugLog("OpenAI cURL error: $curlError");
-        return "OpenAI cURL error: $curlError";
-    }
     if ($httpCode >= 400) {
         debugLog("OpenAI error, HTTP status=$httpCode, resp=$response");
         return "OpenAI error, HTTP status = $httpCode";
     }
 
     $json = json_decode($response, true);
-    if (!$json) {
-        debugLog("Invalid JSON from OpenAI: $response");
-        return $language === 'en' ? "Invalid response." : "Geçersiz cevap.";
-    }
+    $assistantReply = $json["choices"][0]["message"]["content"] ?? "Cevap alınamadı.";
     
-    $assistantReply = $json["choices"][0]["message"]["content"] ?? ($language === 'en' ? "No response received." : "Cevap alınamadı.");
-    debugLog("OpenAI success reply length=" . strlen($assistantReply));
-    
-    // Parse for specialist recommendations if this is from Family Assistant
-    if ($specialty === 'Family Assistant' || $specialty === 'Aile Asistanı') {
+    // Aile Asistanı için uzman önerisini parse et
+    if ($specialty === 'Aile Asistanı' || $specialty === 'Family Assistant') {
         $assistantReply = parseSpecialistRecommendations($assistantReply, $language);
     }
     
@@ -381,47 +430,69 @@ function generateToken(): string {
 // sendMessage action'ına bildirim planlama ekle
 function getTurkishSystemPrompt() {
     return <<<EOT
-Sen, sağlık ve tıbbi bilgiler konusunda geniş çaplı güncel literatürü değerlendirebilen, aynı zamanda görsel ve laboratuvar verisi analiz yeteneğine sahip gelişmiş bir yapay zekâ asistanısın. 
+Sen, gelişmiş bir sağlık asistanı yapay zekasısın. Kullanıcıların sağlık sorunlarını anlamak için detaylı sorular sorarak, onları doğru uzmana yönlendirmelisin.
 
-ÖNEMLI: Eğer bir uzmanlık alanına yönlendirme gerekiyorsa, mutlaka şu formatta belirt:
-"[Uzman Önerisi: Kardiyoloji]" veya "[Uzman Önerisi: Dermatoloji]" gibi.
+GÖREV AKIŞI:
+1. Kullanıcı bir semptom veya sağlık sorunu belirttiğinde, durumu daha iyi anlamak için 5-10 arası soru sor.
+2. Her soruyu tek tek sor, kullanıcının cevabını bekle.
+3. Sorular şu konuları kapsamalı:
+   - Semptomun ne zaman başladığı
+   - Şiddet derecesi (1-10 arası)
+   - Semptomun karakteri (keskin, künt, yanıcı, zonklayıcı vb.)
+   - Tetikleyen faktörler
+   - Rahatlatıcı faktörler
+   - Eşlik eden diğer semptomlar
+   - Daha önce benzer şikayet olup olmadığı
+   - Kullanılan ilaçlar veya tedaviler
 
-Görevin, kullanıcıya gönderdikleri semptom fotoğraflarını, tahlil sonuçlarını veya yazılı sorularını alarak, en son bilimsel makaleler, klinik rehberler ve tıp dergilerindeki bilimsel çalışmalardan derlediğin bilgileri kullanarak detaylı, açık ve öğretici bir açıklama sunmaktır.
+4. Yeterli bilgi topladıktan sonra, uygun uzman(lar)ı öner:
+   [Uzman Önerisi: Kardiyoloji] formatında belirt.
 
-Eğer kullanıcının bahsettiği semptomlar belirli bir uzmanlık alanını işaret ediyorsa, açıklamanın sonunda hangi uzmana gitmesi gerektiğini belirt. Birden fazla uzman önerebilirsin.
+5. Kullanıcının kronik hastalıkları, kullandığı ilaçlar ve alerjileri varsa bunları mutlaka dikkate al.
 
-Temel kurallar:
-1. Tıbbi teşhis koymazsın.
-2. Tedavi reçetesi yazmazsın.
-3. Kullanıcıya mutlaka "bir sağlık profesyoneline başvurun" uyarısı yaparsın.
-4. Verdiğin bilgilerin yalnızca eğitim ve genel bilgilendirme amaçlı olduğunu vurgularsın.
-5. Uygun gördüğün uzmanları [Uzman Önerisi: X] formatında belirt.
+ÖNEMLİ KURALLAR:
+- Kesin tanı koyma
+- İlaç önerisi yapma  
+- Acil durumlarda (göğüs ağrısı, nefes darlığı, bilinç kaybı vb.) hemen 112'yi aramalarını söyle
+- Her zaman "bir sağlık profesyoneline başvurun" uyarısı yap
+- Kullanıcıya ismiyle hitap et
+- Samimi ama profesyonel bir dil kullan
 
-Her önemli bilgi için kaynak göster:
-[1] Mayo Clinic, [2] WHO, [3] PubMed vb.
+Kullanıcının sağlık geçmişini ve profilini dikkate alarak kişiselleştirilmiş öneriler sun.
 EOT;
 }
 
 function getEnglishSystemPrompt() {
     return <<<EOT
-You are an advanced AI assistant capable of evaluating extensive current medical literature and analyzing visual and laboratory data.
+You are an advanced health assistant AI. You should ask detailed questions to understand users' health problems and guide them to the right specialist.
 
-IMPORTANT: If referral to a specialist is needed, indicate it in this format:
-"[Specialist Recommendation: Cardiology]" or "[Specialist Recommendation: Dermatology]" etc.
+WORKFLOW:
+1. When a user mentions a symptom or health issue, ask 5-10 questions to better understand the situation.
+2. Ask each question one by one, wait for the user's response.
+3. Questions should cover:
+   - When the symptom started
+   - Severity (1-10 scale)
+   - Character of the symptom (sharp, dull, burning, throbbing, etc.)
+   - Triggering factors
+   - Relieving factors
+   - Accompanying symptoms
+   - Previous similar complaints
+   - Medications or treatments used
 
-Your task is to provide detailed, clear, and educational explanations using the latest scientific articles, clinical guidelines, and medical journal studies.
+4. After gathering sufficient information, recommend appropriate specialist(s):
+   Indicate in format [Specialist Recommendation: Cardiology].
 
-If the symptoms mentioned by the user indicate a specific specialty area, indicate which specialist they should see at the end of your explanation. You can recommend multiple specialists.
+5. Always consider the user's chronic conditions, medications, and allergies if present.
 
-Basic rules:
-1. Do not make medical diagnoses.
-2. Do not prescribe treatments.
-3. Always advise users to "consult a healthcare professional."
-4. Emphasize that the information is for educational purposes only.
-5. Indicate appropriate specialists in the format [Specialist Recommendation: X].
+IMPORTANT RULES:
+- Do not make definitive diagnoses
+- Do not prescribe medications
+- In emergencies (chest pain, shortness of breath, loss of consciousness, etc.), tell them to call emergency services immediately
+- Always advise to "consult a healthcare professional"
+- Address the user by name
+- Use a friendly but professional tone
 
-Cite sources for important information:
-[1] Mayo Clinic, [2] WHO, [3] PubMed etc.
+Provide personalized recommendations considering the user's health history and profile.
 EOT;
 }
 
@@ -483,6 +554,30 @@ if (isset($_GET['action'])) {
 
     switch ($action) {
         // Save user health data (onboarding)
+// Yeni session oluşturma endpoint
+case 'createChatSession':
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['user_id'];
+    $specialty = $input['specialty'];
+    $sessionId = uniqid('session_', true);
+    
+    $stmt = $conn->prepare("
+        INSERT INTO chat_sessions (session_id, user_id, specialty) 
+        VALUES (?, ?, ?)
+    ");
+    $stmt->bind_param("sis", $sessionId, $userId, $specialty);
+    
+    if ($stmt->execute()) {
+        echo json_encode([
+            "success" => true, 
+            "session_id" => $sessionId,
+            "debug" => $debug
+        ]);
+    } else {
+        echo json_encode(["error" => "Failed to create session", "debug" => $debug]);
+    }
+    exit;
+// saveHealthData fonksiyonunu güncelle
 case 'saveHealthData':
     debugLog("saveHealthData route");
     $input = json_decode(file_get_contents('php://input'), true);
@@ -494,7 +589,7 @@ case 'saveHealthData':
     $userId     = (int)$input['user_id'];
     $healthData = $input['health_data'];
 
-    /* ——— 1) Kullanıcı adını güncelle ——— */
+    // 1) Kullanıcı adını güncelle
     if (!empty($healthData['displayName'])) {
         $q = $conn->prepare("UPDATE users3 SET name = ? WHERE id = ?");
         $q->bind_param("si", $healthData['displayName'], $userId);
@@ -502,38 +597,65 @@ case 'saveHealthData':
         $q->close();
     }
 
-    /* ——— 2) user_profile verisi ——— */
+    // 2) user_profile verisi - artık ayrı sütunlara kaydet
     $birthDate = !empty($healthData['birthDate'])
         ? date('Y-m-d', strtotime($healthData['birthDate']))
         : null;
 
-    $gender    = $healthData['gender']    ?? null;
+    $gender = $healthData['gender'] ?? null;
+    $displayName = $healthData['displayName'] ?? '';
+    $height = !empty($healthData['height']) ? intval($healthData['height']) : null;
+    $weight = !empty($healthData['weight']) ? intval($healthData['weight']) : null;
+    $bloodType = $healthData['bloodType'] ?? null;
+    $importantDiseases = $healthData['importantDiseases'] ?? '';
+    $medications = $healthData['medications'] ?? '';
+    $hadSurgery = isset($healthData['hadSurgery']) ? ($healthData['hadSurgery'] ? 1 : 0) : 0;
+    $surgeries = $healthData['surgeries'] ?? '';
+    $allergies = $healthData['allergies'] ?? '';
 
-    // JSON-e dönüşecek cevaplar
+    // JSON formatı da sakla (geriye uyumluluk için)
     $answers = [
         'birthDate'        => $birthDate,
         'gender'           => $gender,
-        'importantDiseases'=> $healthData['importantDiseases'] ?? '',
-        'medications'      => $healthData['medications'] ?? '',
-        'hadSurgery'       => $healthData['hadSurgery'] ?? false,
-        'surgeryDetails'   => $healthData['surgeryDetails'] ?? '',
-        'height'           => $healthData['height'] ?? '',
-        'weight'           => $healthData['weight'] ?? '',
-        'bloodType'        => $healthData['bloodType'] ?? '',
-        'allergies'        => $healthData['allergies'] ?? '',
+        'importantDiseases'=> $importantDiseases,
+        'medications'      => $medications,
+        'hadSurgery'       => $hadSurgery,
+        'surgeryDetails'   => $surgeries,
+        'height'           => $height,
+        'weight'           => $weight,
+        'bloodType'        => $bloodType,
+        'allergies'        => $allergies,
     ];
     $answersJson = json_encode($answers, JSON_UNESCAPED_UNICODE);
 
-    /* Tek sorgu: INSERT varsa UPDATE */
+    // Hem JSON hem de ayrı sütunlara kaydet
     $stmt = $conn->prepare("
-        INSERT INTO user_profile (user_id, gender, birth_date, answers)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO user_profile (
+            user_id, display_name, birth_date, gender, height, weight, 
+            blood_type, important_diseases, medications, had_surgery, 
+            surgeries, allergies, answers
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
-            gender      = VALUES(gender),
-            birth_date  = VALUES(birth_date),
-            answers     = VALUES(answers)
+            display_name = VALUES(display_name),
+            birth_date = VALUES(birth_date),
+            gender = VALUES(gender),
+            height = VALUES(height),
+            weight = VALUES(weight),
+            blood_type = VALUES(blood_type),
+            important_diseases = VALUES(important_diseases),
+            medications = VALUES(medications),
+            had_surgery = VALUES(had_surgery),
+            surgeries = VALUES(surgeries),
+            allergies = VALUES(allergies),
+            answers = VALUES(answers)
     ");
-    $stmt->bind_param("isss", $userId, $gender, $birthDate, $answersJson);
+    
+    $stmt->bind_param("isssiisssisss", 
+        $userId, $displayName, $birthDate, $gender, $height, $weight, 
+        $bloodType, $importantDiseases, $medications, $hadSurgery, 
+        $surgeries, $allergies, $answersJson
+    );
 
     if ($stmt->execute()) {
         echo json_encode(["success" => true, "message" => "Health data saved", "debug" => $debug]);
@@ -1342,135 +1464,106 @@ case 'checkSubscription':
  *  SEND MESSAGE
  * ============================================================
  */
+// sendMessage güncelle - session_id ekle
 case 'sendMessage':
     debugLog('sendMessage route');
-
-    // ---------- 1) JSON INPUT ------------------------------------------------
+    
     $input = json_decode(file_get_contents('php://input'), true);
-    if (!$input)                          handleError('Invalid JSON input');
-    if (!isset($input['user_id'],
-               $input['specialty'],
-               $input['user_message']))   handleError('user_id, specialty and user_message required.');
+    if (!$input) handleError('Invalid JSON input');
+    
+    if (!isset($input['user_id'], $input['specialty'], $input['user_message'])) {
+        handleError('user_id, specialty and user_message required.');
+    }
 
-    $userId            = intval($input['user_id']);
-    $specialty         = trim($input['specialty']);
-    $userMessage       = trim($input['user_message']);
-    $language          = $input['language']          ?? 'tr';
+    $userId = intval($input['user_id']);
+    $specialty = trim($input['specialty']);
+    $userMessage = trim($input['user_message']);
+    $language = $input['language'] ?? 'tr';
     $isHealthAssistant = $input['is_health_assistant'] ?? false;
+    $sessionId = $input['session_id'] ?? null;
 
-    debugLog("Params: userId=$userId • specialty=$specialty • lang=$language");
+    // Session kontrolü
+    if (!$sessionId && $isHealthAssistant) {
+        handleError('session_id required for health assistant');
+    }
 
-    // ---------- 2) FREE PLAN - GÜNLÜK MESAJ LİMİTİ ---------------------------
-    $subStmt = $conn->prepare(
-        "SELECT plan_type, daily_message_count, last_message_date
-         FROM   subscription_info
-         WHERE  user_id = ?
-         LIMIT  1"
-    );
+    // Free plan kontrolü
+    $subStmt = $conn->prepare("
+        SELECT u.plan_type, si.daily_message_count, si.last_message_date
+        FROM users3 u
+        LEFT JOIN subscription_info si ON u.id = si.user_id
+        WHERE u.id = ?
+        LIMIT 1
+    ");
     $subStmt->bind_param("i", $userId);
     $subStmt->execute();
     $subRes = $subStmt->get_result();
     $subscription = $subRes->fetch_assoc();
     $subStmt->close();
 
-    if (!$subscription) {
-        // Eğer henüz abonelik satırı yoksa ekle (free plan varsayılan)
-        $conn->query("INSERT INTO subscription_info (user_id, plan_type)
-                      VALUES ($userId, 'free')");
-        $subscription = [
-            'plan_type'            => 'free',
-            'daily_message_count'  => 0,
-            'last_message_date'    => null
-        ];
-    }
-
-    $today = date('Y-m-d');
-    if ($subscription['plan_type'] === 'free') {
-        // Aynı gün mü?
-        if ($subscription['last_message_date'] !== $today) {
-            // Yeni gün → sayaç sıfırla
-            $conn->query("
-                UPDATE subscription_info
-                SET daily_message_count = 0,
-                    last_message_date   = '$today'
-                WHERE user_id = $userId
-            ");
-            $subscription['daily_message_count'] = 0;
+    $planType = $subscription['plan_type'] ?? 'free';
+    
+    if ($planType === 'free') {
+        $today = date('Y-m-d');
+        $messageCount = 0;
+        
+        if ($subscription['last_message_date'] === $today) {
+            $messageCount = $subscription['daily_message_count'] ?? 0;
         }
-
-        // Limit: 3 mesaj / gün
-        if ($subscription['daily_message_count'] >= 3) {
+        
+        if ($messageCount >= 3) {
             echo json_encode([
-                "success"        => false,
-                "limit_reached"  => true,
-                "error"          => "Daily message limit reached",
-                "debug"          => $debug
+                "success" => false,
+                "limit_reached" => true,
+                "error" => "Daily message limit reached",
+                "debug" => $debug
             ]);
             exit;
         }
     }
 
-    // ---------- 3) USER MESAJINI DB’YE YAZ -----------------------------------
-    $stmt = $conn->prepare(
-        "INSERT INTO user_chats3 (user_id, specialty, role, message)
-         VALUES (?, ?, 'user', ?)"
-    );
-    if (!$stmt) handleError("DB prepare error (user msg): " . $conn->error);
-    $stmt->bind_param("iss", $userId, $specialty, $userMessage);
-    if (!$stmt->execute()) handleError("DB insert error (user msg): " . $stmt->error);
+    // Mesajı kaydet - session_id ile
+    $stmt = $conn->prepare("
+        INSERT INTO user_chats3 (user_id, session_id, specialty, role, message)
+        VALUES (?, ?, ?, 'user', ?)
+    ");
+    $stmt->bind_param("isss", $userId, $sessionId, $specialty, $userMessage);
+    $stmt->execute();
     $stmt->close();
 
-    // ---------- 4) OPENAI’Yİ ÇAĞIR -------------------------------------------
+    // AI yanıtını al
     try {
         $assistantReply = callOpenAI($userId, $specialty, $userMessage, $language);
     } catch (Exception $e) {
         handleError("OpenAI error: " . $e->getMessage());
     }
 
-    // ---------- 5) ASSISTANT MESAJINI DB’YE YAZ -------------------------------
-    $stmt = $conn->prepare(
-        "INSERT INTO user_chats3 (user_id, specialty, role, message)
-         VALUES (?, ?, 'assistant', ?)"
-    );
-    if (!$stmt) handleError("DB prepare error (assistant msg): " . $conn->error);
-    $stmt->bind_param("iss", $userId, $specialty, $assistantReply);
-    if (!$stmt->execute()) handleError("DB insert error (assistant msg): " . $stmt->error);
+    // Assistant yanıtını kaydet
+    $stmt = $conn->prepare("
+        INSERT INTO user_chats3 (user_id, session_id, specialty, role, message)
+        VALUES (?, ?, ?, 'assistant', ?)
+    ");
+    $stmt->bind_param("isss", $userId, $sessionId, $specialty, $assistantReply);
+    $stmt->execute();
     $stmt->close();
 
-    // ---------- 6) FREE PLAN SAYAÇ ARTIR -------------------------------------
-    if ($subscription['plan_type'] === 'free') {
+    // Free plan sayacı güncelle
+    if ($planType === 'free') {
         $conn->query("
-            UPDATE subscription_info
-            SET daily_message_count = daily_message_count + 1,
-                last_message_date   = '$today'
-            WHERE user_id = $userId
+            INSERT INTO subscription_info (user_id, daily_message_count, last_message_date)
+            VALUES ($userId, 1, '$today')
+            ON DUPLICATE KEY UPDATE
+            daily_message_count = daily_message_count + 1,
+            last_message_date = '$today'
         ");
     }
 
-    // ---------- 7) HEALTH-ASSISTANT İSE → NOTİFİKASYON PLANLA -----------------
-    if ($isHealthAssistant) {
-        scheduleUserNotifications($userId);
-    }
-
-    // ---------- 8) SPECIALIST RECOMMENDATION PARSE ---------------------------
-    $responseText = $assistantReply;
-    if ($isHealthAssistant) {
-        // Eğer JSON formatında öneri geldiyse aynen ilet
-        $tryJson = json_decode($assistantReply, true);
-        if (json_last_error() === JSON_ERROR_NONE &&
-            isset($tryJson['specialistRecommendation'])) {
-            $responseText = json_encode($tryJson, JSON_UNESCAPED_UNICODE);
-        }
-    }
-
-    // ---------- 9) RESPONSE --------------------------------------------------
     echo json_encode([
-        "success"          => true,
-        "assistant_reply"  => $responseText,
-        "debug"            => $debug
+        "success" => true,
+        "assistant_reply" => $assistantReply,
+        "debug" => $debug
     ]);
-    break;   //  ← case 'sendMessage'
-
+    break;
     
         // Get profile
         case 'getProfile':
