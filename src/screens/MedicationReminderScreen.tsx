@@ -13,6 +13,7 @@ import {
   Alert,
   Platform,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
@@ -136,7 +137,7 @@ export default function MedicationReminderScreen({ route, navigation }: Medicati
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [adherenceRate, setAdherenceRate] = useState(0);
-  
+  const [loading, setLoading] = useState(false);
   // Form states
   const [formData, setFormData] = useState<Partial<Medication>>({
     name: '',
@@ -212,28 +213,139 @@ const loadProfileMedications = async () => {
   }
 };
 
-  const loadMedications = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(`medications_${userId}`);
-      if (stored) {
-        const meds: Medication[] = JSON.parse(stored);
-        setMedications(meds);
-        generateTodayReminders(meds);
-      }
-    } catch (error) {
-      console.error('Error loading medications:', error);
-    }
-  };
+// Backend ile çalışacak şekilde güncellenmiş fonksiyonlar:
 
-  const saveMedications = async (meds: Medication[]) => {
-    try {
-      await AsyncStorage.setItem(`medications_${userId}`, JSON.stringify(meds));
+const loadMedications = async () => {
+  try {
+    const response = await axios.get(`${SERVER_URL}?action=getMedications&user_id=${userId}`);
+    if (response.data.success) {
+      const meds: Medication[] = response.data.medications.map((m: any) => ({
+        ...m,
+        startDate: new Date(m.start_date),
+        endDate: m.end_date ? new Date(m.end_date) : undefined,
+        isActive: Boolean(m.is_active),
+      }));
       setMedications(meds);
       generateTodayReminders(meds);
-    } catch (error) {
-      console.error('Error saving medications:', error);
+      
+      // Profil ilaçlarını da yükle
+      await loadProfileMedications();
     }
-  };
+  } catch (error) {
+    console.error('Error loading medications:', error);
+  }
+};
+
+const saveMedications = async (meds: Medication[]) => {
+  // Artık AsyncStorage yerine backend kullanacağız
+  setMedications(meds);
+  generateTodayReminders(meds);
+};
+
+const addMedication = async () => {
+  if (!formData.name || !formData.dosage) {
+    Alert.alert(t('medication.missingInfo'));
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const response = await axios.post(`${SERVER_URL}?action=saveMedication`, {
+      user_id: userId,
+      medication: {
+        ...formData,
+        start_date: formData.startDate?.toISOString().split('T')[0],
+        end_date: formData.endDate?.toISOString().split('T')[0],
+      }
+    });
+
+    if (response.data.success) {
+      await loadMedications(); // Yeniden yükle
+      setShowAddModal(false);
+      resetForm();
+      Alert.alert(t('common.success'), t('medication.medicationAdded'));
+    }
+  } catch (error) {
+    Alert.alert(t('common.error'), t('medication.saveError'));
+  } finally {
+    setLoading(false);
+  }
+};
+
+const toggleMedication = async (id: string) => {
+  const med = medications.find(m => m.id === id);
+  if (!med) return;
+
+  try {
+    const response = await axios.post(`${SERVER_URL}?action=updateMedication`, {
+      medication_id: id,
+      updates: { is_active: !med.isActive }
+    });
+
+    if (response.data.success) {
+      const updated = medications.map(m => 
+        m.id === id ? { ...m, isActive: !m.isActive } : m
+      );
+      setMedications(updated);
+      generateTodayReminders(updated);
+    }
+  } catch (error) {
+    Alert.alert(t('common.error'), 'Failed to update medication');
+  }
+};
+
+const deleteMedication = async (id: string) => {
+  Alert.alert(
+    t('common.delete'),
+    t('medication.deleteConfirm'),
+    [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const response = await axios.post(`${SERVER_URL}?action=deleteMedication`, {
+              medication_id: id
+            });
+            
+            if (response.data.success) {
+              await loadMedications();
+            }
+          } catch (error) {
+            Alert.alert(t('common.error'), 'Failed to delete medication');
+          }
+        },
+      },
+    ]
+  );
+};
+
+const markTaken = async (medicationId: string, time: string) => {
+  const today = new Date();
+  
+  try {
+    await axios.post(`${SERVER_URL}?action=recordMedicationTaken`, {
+      user_id: userId,
+      medication_id: medicationId,
+      taken_time: time,
+      taken_date: today.toISOString().split('T')[0],
+    });
+
+    const updated = todayReminders.map(reminder => {
+      if (reminder.medicationId === medicationId && reminder.time === time) {
+        return { ...reminder, taken: true, takenAt: new Date() };
+      }
+      return reminder;
+    });
+    setTodayReminders(updated);
+    
+    // Update adherence
+    calculateAdherence();
+  } catch (error) {
+    Alert.alert(t('common.error'), 'Failed to record medication');
+  }
+};
 
   const generateTodayReminders = (meds: Medication[]) => {
     const today = new Date();
@@ -259,85 +371,8 @@ const loadProfileMedications = async () => {
 
 
 
-  const addMedication = () => {
-    if (!formData.name || !formData.dosage) {
-      Alert.alert('Eksik Bilgi', 'Lütfen ilaç adı ve dozajını girin');
-      return;
-    }
 
-    const newMedication: Medication = {
-      id: Date.now().toString(),
-      name: formData.name,
-      dosage: formData.dosage,
-      frequency: formData.frequency || 'daily',
-      times: formData.times || ['09:00'],
-      startDate: formData.startDate || new Date(),
-      endDate: formData.endDate,
-      notes: formData.notes,
-      isActive: true,
-      color: formData.color || MEDICATION_COLORS[0],
-      icon: formData.icon || MEDICATION_ICONS[0],
-    };
 
-    const updated = [...medications, newMedication];
-    saveMedications(updated);
-    scheduleNotifications(newMedication);
-    
-    setShowAddModal(false);
-    resetForm();
-    
-Alert.alert(t('common.success'), t('medication.medicationSaved'));
-
-  };
-
-  const toggleMedication = (id: string) => {
-    const updated = medications.map(med => {
-      if (med.id === id) {
-        const newStatus = !med.isActive;
-        if (newStatus) {
-          scheduleNotifications(med);
-        } else {
-          cancelNotifications(med.id);
-        }
-        return { ...med, isActive: newStatus };
-      }
-      return med;
-    });
-    saveMedications(updated);
-  };
-
-  const deleteMedication = (id: string) => {
-    Alert.alert(
-      'İlaç Sil',
-      'Bu ilacı silmek istediğinizden emin misiniz?',
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: () => {
-            cancelNotifications(id);
-            const updated = medications.filter(med => med.id !== id);
-            saveMedications(updated);
-          },
-        },
-      ]
-    );
-  };
-
-  const markTaken = (medicationId: string, time: string) => {
-    const updated = todayReminders.map(reminder => {
-      if (reminder.medicationId === medicationId && reminder.time === time) {
-        return { ...reminder, taken: true, takenAt: new Date() };
-      }
-      return reminder;
-    });
-    setTodayReminders(updated);
-    saveTodayProgress(updated);
-    
-    // Update adherence
-    calculateAdherence();
-  };
 
   const markSkipped = (medicationId: string, time: string, reason?: string) => {
     const updated = todayReminders.map(reminder => {

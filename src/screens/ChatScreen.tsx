@@ -105,7 +105,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     dailyMessageCount,
     dailyMessageLimit 
   } = useSubscription();
-
+const [showSpecialistRecommendation, setShowSpecialistRecommendation] = useState<string | null>(null);
+const pulseAnim = useRef(new Animated.Value(1)).current;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [userMessage, setUserMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -155,15 +156,36 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     // Set language for speech service
     SpeechService.setLanguage(language);
     
-    // Show welcome message if it's health assistant and no messages
-    if (isHealthAssistant && messages.length === 0) {
+  if (isHealthAssistant && messages.length === 0) {
+    setTimeout(() => {
       showWelcomeMessage();
-    }
+    }, 500);
+  }
+    // Ses animasyonu
+  if (isListening) {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.3,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  } else {
+    pulseAnim.setValue(1);
+  }
+  
+  return () => {
+    SpeechService.destroy();
+  };
+}, [isListening]);
     
-    return () => {
-      SpeechService.destroy();
-    };
-  }, []);
 
   useEffect(() => {
     // Schedule notifications based on chat history
@@ -188,15 +210,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     ]).start();
   };
 
-  const showWelcomeMessage = () => {
-    const welcomeMsg: ChatMessage = {
-      id: 'welcome',
-      sender: 'assistant',
-      text: t('chat.welcomeMessage'),
-      createdAt: formatTime(new Date().toISOString()),
-    };
-    setMessages([welcomeMsg]);
+const showWelcomeMessage = () => {
+  const welcomeMsg: ChatMessage = {
+    id: 'welcome',
+    sender: 'assistant',
+    text: language === 'tr' 
+      ? 'Merhaba! Ben sizin sağlık asistanınızım. Size nasıl yardımcı olabilirim? Şikayetlerinizi, sorularınızı veya tahlil sonuçlarınızı benimle paylaşabilirsiniz.'
+      : 'Hello! I am your health assistant. How can I help you today? You can share your symptoms, questions, or test results with me.',
+    createdAt: formatTime(new Date().toISOString()),
   };
+  setMessages([welcomeMsg]);
+};
 
   const fetchMessages = async () => {
     if (!userId || !assistantName) return;
@@ -245,116 +269,115 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     const date = new Date(dt);
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   };
+const handleSend = async () => {
+  if (!canSendMessage) {
+    setShowUpgradeModal(true);
+    return;
+  }
 
-  const handleSend = async () => {
-    // Check subscription limits
-    if (!canSendMessage) {
+  if (!userId) {
+    Alert.alert(t('common.error'), 'User ID not found.');
+    return;
+  }
+  
+  if (selectedImage) {
+    if (!canSendImage) {
+      Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
       setShowUpgradeModal(true);
       return;
     }
+    await sendImageMessage();
+    return;
+  }
+  
+  if (!userMessage.trim()) {
+    return;
+  }
 
-    if (!userId) {
-      Alert.alert(t('common.error'), 'User ID not found.');
-      return;
-    }
-    
-    if (selectedImage) {
-      if (!canSendImage) {
-        Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
-        setShowUpgradeModal(true);
-        return;
-      }
-      await sendImageMessage();
-      return;
-    }
-    
-    if (!userMessage.trim()) {
-      return;
-    }
+  const now = new Date();
+  const userMsgObj: ChatMessage = {
+    id: Date.now().toString(),
+    sender: 'user',
+    text: userMessage,
+    createdAt: formatTime(now.toISOString()),
+  };
 
-    const now = new Date();
-    const userMsgObj: ChatMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: userMessage,
-      createdAt: formatTime(now.toISOString()),
-    };
+  const placeholderId = `${Date.now()}-loading`;
+  const loadingBubble: ChatMessage = {
+    id: placeholderId,
+    sender: 'assistant',
+    text: '',
+    isLoading: true,
+    createdAt: '',
+  };
+  
+  setMessages((prev) => [...prev, userMsgObj, loadingBubble]);
+  setUserMessage('');
+  setLoading(true);
+  setShowQuickActions(false);
+  
+  if (!isPremium) {
+    await incrementMessageCount();
+  }
+  
+  setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
 
-    const placeholderId = `${Date.now()}-loading`;
-    const loadingBubble: ChatMessage = {
-      id: placeholderId,
-      sender: 'assistant',
-      text: '',
-      isLoading: true,
-      createdAt: '',
-    };
+  try {
+    // assistantName'i doğru şekilde gönderin
+    const specialtyName = assistantName || 'Aile Asistanı';
     
-    setMessages((prev) => [...prev, userMsgObj, loadingBubble]);
-    setUserMessage('');
-    setLoading(true);
-    setShowQuickActions(false);
-    
-    // Increment message count for free users
-    if (!isPremium) {
-      await incrementMessageCount();
-    }
-    
-    setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
+    const { data } = await axios.post(`${SERVER_URL}?action=sendMessage`, {
+      user_id: String(userId),
+      specialty: specialtyName,
+      user_message: userMessage,
+      language,
+      is_health_assistant: isHealthAssistant,
+    });
 
-    try {
-      const { data } = await axios.post(`${SERVER_URL}?action=sendMessage`, {
-        user_id: userId,
-        specialty: assistantName || 'Family Assistant',
-        user_message: userMessage,
-        language,
-        is_health_assistant: isHealthAssistant,
-      });
-
-      if (data.success) {
-        // Parse the response for structured data
-        let analysis: MessageAnalysis | undefined;
-        let responseText = data.assistant_reply;
-        let specialistRecommendation: string[] | undefined;
-        
-        try {
-          const parsed = JSON.parse(data.assistant_reply);
-          if (parsed.analysis) {
-            analysis = parsed.analysis;
-            responseText = parsed.text || data.assistant_reply;
-            specialistRecommendation = parsed.specialistRecommendation;
-          }
-        } catch (e) {
-          // Response is plain text, extract references if any
-          const references = extractReferences(responseText);
-          if (references.length > 0) {
-            analysis = { references };
+    if (data.success) {
+      let responseText = data.assistant_reply;
+      let specialistRecommendation: string[] | undefined;
+      
+      // Uzman önerisi varsa parse et
+      try {
+        const parsed = JSON.parse(data.assistant_reply);
+        if (parsed.specialistRecommendation) {
+          specialistRecommendation = parsed.specialistRecommendation;
+          responseText = parsed.text;
+          
+          // İlk uzman önerisini göster
+          if (specialistRecommendation.length > 0) {
+            setShowSpecialistRecommendation(specialistRecommendation[0]);
           }
         }
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === placeholderId
-              ? {
-                  ...m,
-                  text: responseText,
-                  isLoading: false,
-                  createdAt: formatTime(now.toISOString()),
-                  analysis,
-                  specialistRecommendation,
-                }
-              : m,
-          ),
-        );
-      } else {
-        throw new Error(data.error || 'Server error');
+      } catch (e) {
+        // JSON değilse düz metin olarak kullan
       }
-    } catch (e: any) {
-      setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
-      Alert.alert(t('common.error'), e.message || 'Failed to send message.');
-    } finally {
-      setLoading(false);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === placeholderId
+            ? {
+                ...m,
+                text: responseText,
+                isLoading: false,
+                createdAt: formatTime(now.toISOString()),
+                specialistRecommendation,
+              }
+            : m,
+        ),
+      );
+    } else {
+      throw new Error(data.error || 'Server error');
     }
-  };
+  } catch (e: any) {
+    console.error('Send message error:', e);
+    setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
+    Alert.alert(t('common.error'), e.message || 'Failed to send message.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const extractReferences = (text: string): Reference[] => {
     const references: Reference[] = [];
@@ -371,40 +394,66 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     return references;
   };
 
-  const handleVoiceMessage = async () => {
-    if (!canSendMessage) {
-      setShowUpgradeModal(true);
-      return;
-    }
+const handleVoiceMessage = async () => {
+  if (!canSendMessage) {
+    setShowUpgradeModal(true);
+    return;
+  }
 
-    const available = await SpeechService.isAvailable();
-    if (!available) {
-Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
-      return;
-    }
+  const available = await SpeechService.isAvailable();
+  if (!available) {
+    Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
+    return;
+  }
 
-    if (isListening) {
-      await SpeechService.stopListening();
-      setIsListening(false);
-    } else {
-      setIsListening(true);
-      await SpeechService.startListening(
-        (text) => {
-          setUserMessage(text);
-          setIsListening(false);
-          // Auto send after voice input
-          setTimeout(() => handleSend(), 500);
-        },
-        (error) => {
-          Alert.alert(t('common.error'), error);
-          setIsListening(false);
-        },
-        (partialText) => {
-          setUserMessage(partialText);
+  if (isListening) {
+    // Durduruluyor
+    await SpeechService.stopListening();
+    setIsListening(false);
+  } else {
+    // Başlatılıyor
+    setIsListening(true);
+    
+    // Pulse animasyonu başlat
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.3,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+    
+    await SpeechService.startListening(
+      (text) => {
+        setUserMessage(text);
+        setIsListening(false);
+        pulseAnim.setValue(1);
+        // Otomatik gönder
+        if (text.trim()) {
+          setTimeout(() => {
+            handleSend();
+          }, 500);
         }
-      );
-    }
-  };
+      },
+      (error) => {
+        Alert.alert(t('common.error'), error);
+        setIsListening(false);
+        pulseAnim.setValue(1);
+      },
+      (partialText) => {
+        setUserMessage(partialText);
+      }
+    );
+  }
+};
+
 
   const sendImageMessage = async () => {
     if (!selectedImage) return;
@@ -718,7 +767,7 @@ return (
         </TouchableOpacity>
       </View>
     </View>
-        <KeyboardAvoidingView
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
@@ -749,7 +798,31 @@ return (
           </View>
         }
       />
-
+      {/* Uzman önerisi gösterimi */}
+      {showSpecialistRecommendation && (
+        <Animated.View 
+          style={[styles.specialistSuggestion]}
+          entering={FadeInDown.duration(300)}
+        >
+          <Text style={styles.suggestionText}>
+            {language === 'tr' 
+              ? 'Durumunuz için uzman görüşü almanızı öneriyorum:'
+              : 'I recommend consulting with a specialist for your condition:'}
+          </Text>
+          <TouchableOpacity
+            style={styles.suggestionButton}
+            onPress={() => {
+              handleSpecialistRecommendation(showSpecialistRecommendation);
+              setShowSpecialistRecommendation(null);
+            }}
+          >
+            <Text style={styles.suggestionButtonText}>
+              {getAssistantName(showSpecialistRecommendation, t)}
+            </Text>
+            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
       {/* ───────────── Hızlı Aksiyonlar ───────────── */}
       {showQuickActions && isHealthAssistant && messages.length <= 1 && (
         <Animated.View style={[styles.quickActions, { opacity: fadeAnim }]}>
@@ -797,8 +870,10 @@ return (
       )}
 
       {/* ────────────────── Giriş Alanı ────────────────── */}
-      <View style={styles.inputWrapper}>
+      {/* Input wrapper - bottom padding eklendi */}
+      <View style={[styles.inputWrapper, { paddingBottom: Platform.OS === 'ios' ? 90 : 80 }]}>
         <View style={styles.inputContainer}>
+          {/* Kamera butonu */}
           <TouchableOpacity
             onPress={handleCameraCapture}
             disabled={loading}
@@ -807,6 +882,7 @@ return (
             <MaterialIcons name="camera-alt" size={24} color="#666" />
           </TouchableOpacity>
 
+          {/* Galeri butonu */}
           <TouchableOpacity
             onPress={handleImagePickFromGallery}
             disabled={loading}
@@ -815,22 +891,30 @@ return (
             <MaterialIcons name="photo" size={24} color="#666" />
           </TouchableOpacity>
 
+          {/* Ses butonu - animasyonlu */}
           <TouchableOpacity
             onPress={handleVoiceMessage}
             disabled={loading}
-            style={[
-              styles.inputButton,
-              isListening && styles.inputButtonActive,
-            ]}
+            style={styles.inputButton}
           >
-            <MaterialIcons
-              name={isListening ? 'mic' : 'mic-none'}
-              size={24}
-              color={isListening ? '#FF0000' : '#666'}
-            />
-            {isListening && <Animated.View style={styles.listeningIndicator} />}
+            <Animated.View
+              style={[
+                styles.voiceButtonInner,
+                isListening && styles.voiceButtonActive,
+                {
+                  transform: [{ scale: pulseAnim }],
+                },
+              ]}
+            >
+              <MaterialIcons
+                name={isListening ? 'mic' : 'mic-none'}
+                size={24}
+                color={isListening ? '#fff' : '#666'}
+              />
+            </Animated.View>
           </TouchableOpacity>
 
+          {/* Metin girişi */}
           <TextInput
             ref={inputRef}
             style={styles.input}
@@ -841,10 +925,9 @@ return (
             editable={!loading && !isListening}
             multiline
             maxLength={1000}
-            onFocus={() => setShowQuickActions(false)}
-            onBlur={() => messages.length === 0 && setShowQuickActions(true)}
           />
 
+          {/* Gönder butonu */}
           <TouchableOpacity
             style={[
               styles.sendButton,
@@ -1033,6 +1116,56 @@ auroraBlob: {
   messageWrapper: {
     marginBottom: 16,
   },
+  // styles'a ekleyin:
+
+voiceButtonInner: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+voiceButtonActive: {
+  backgroundColor: '#FF0000',
+  shadowColor: '#FF0000',
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.8,
+  shadowRadius: 10,
+  elevation: 5,
+},
+specialistSuggestion: {
+  backgroundColor: 'rgba(102, 126, 234, 0.1)',
+  borderTopWidth: 1,
+  borderTopColor: 'rgba(102, 126, 234, 0.3)',
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+},
+suggestionText: {
+  fontSize: 14,
+  color: '#666',
+  marginBottom: 8,
+},
+suggestionButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#667eea',
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  borderRadius: 20,
+  alignSelf: 'flex-start',
+  gap: 8,
+},
+suggestionButtonText: {
+  color: '#fff',
+  fontSize: 15,
+  fontWeight: '600',
+},
+inputWrapper: {
+  backgroundColor: '#fff',
+  borderTopWidth: 1,
+  borderTopColor: '#e0e0e0',
+  // paddingBottom şimdi component içinde dinamik olarak ayarlanıyor
+},
   userMessageWrapper: {
     alignItems: 'flex-end',
   },
@@ -1203,12 +1336,6 @@ specialistButtonText: {
     fontSize: 13,
     color: '#666',
     marginLeft: 4,
-  },
-  inputWrapper: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 0,
   },
   inputContainer: {
     flexDirection: 'row',

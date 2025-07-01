@@ -33,7 +33,7 @@ const handleassistantSelect = (nameKey: string) => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Doktorlar</Text>
+        <Text style={styles.headerTitle}>Sağlık Asistanları</Text>
       </View>
       <ScrollView contentContainerStyle={styles.grid}>
         {assistantS.map((assistant) => (

@@ -145,28 +145,38 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
 
 
 
-  const handleGuestLogin = async () => {
-    setLoading(true);
-    try {
-      const guestId = 'guest_' + Date.now();
-      const guestName = t('common.guest');
+const handleGuestLogin = async () => {
+  setLoading(true);
+  try {
+    const res = await axios.post(`${SERVER_URL}?action=guestLogin`, {
+      language,
+    });
 
-      await AsyncStorage.setItem(
-        'userData',
-        JSON.stringify({ userId: guestId, userName: guestName, userType: 'guest' }),
-      );
-
-      Alert.alert(t('common.success'), t('auth.guestSuccess'));
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'MainTabs', params: { userId: guestId, userName: guestName } }],
-      });
-    } catch {
-      Alert.alert(t('common.error'), t('auth.guestError'));
-    } finally {
-      setLoading(false);
+    if (!res.data.success) {
+      Alert.alert(t('common.error'), res.data.error || t('auth.guestError'));
+      return;
     }
-  };
+
+    await AsyncStorage.setItem(
+      'userData',
+      JSON.stringify({
+        userId:   String(res.data.user_id),
+        userName: res.data.name,
+        userType: 'guest',
+      }),
+    );
+
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainTabs',
+        params: { userId: String(res.data.user_id), userName: res.data.name } }],
+    });
+  } catch (e: any) {
+    Alert.alert(t('common.error'), e.message || t('auth.guestError'));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGoogleSignup = async () => {
     try {
@@ -215,7 +225,57 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
         Alert.alert(t('common.error'), t('auth.signupError'));
     }
   };
+const handleSignup = async () => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  // --- form kontrolleri
+  if (!name.trim())          { Alert.alert(t('common.error'), t('auth.nameRequired'));  return; }
+  if (!emailRegex.test(email)){ Alert.alert(t('common.error'), t('auth.invalidEmail')); return; }
+  if (password.length < 6)   { Alert.alert(t('common.error'), t('auth.passwordTooShort')); return; }
+  if (!termsAccepted)        { Alert.alert(t('common.error'), t('auth.acceptTerms'));  return; }
+
+  try {
+    setLoading(true);
+
+    const res = await axios.post(`${SERVER_URL}?action=signup`, {
+      name,
+      email,
+      password,
+      language,
+    });
+
+    if (!res.data.success) {
+      Alert.alert(t('common.error'), res.data.error || t('auth.signupError'));
+      return;
+    }
+
+    // ➜ kullanıcıyı kaydet
+    await AsyncStorage.setItem(
+      'userData',
+      JSON.stringify({
+        userId:   String(res.data.user_id),
+        userName: name,
+        userType: 'registered',
+      }),
+    );
+
+    Alert.alert(t('common.success'), t('auth.signupSuccess'));
+
+    navigation.reset({
+      index: 0,
+      routes: [{
+        name: 'Onboarding',
+        params: { userId: String(res.data.user_id), userName: name },
+      }],
+    });
+  } catch (err: any) {
+    Alert.alert(t('common.error'),
+      err.response?.data?.error || err.message || t('auth.signupError')
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 const handleAppleSignup = async () => {
   try {
     const rawNonce   = uuidv4();
@@ -427,7 +487,7 @@ const handleAppleSignup = async () => {
   <TouchableOpacity
     style={styles.guestButton2}
     activeOpacity={0.85}
-    onPress={() => navigation.navigate('Signup')}
+    onPress={handleSignup}
   >
     <Text style={styles.guestButtonText2}>{t('auth.signup')}</Text>
     <MaterialIcons name="arrow-forward-ios" size={20} color="#667eea" />

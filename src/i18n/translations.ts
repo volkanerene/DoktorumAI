@@ -83,8 +83,8 @@ export const translations = {
     
     // First screen
     first: {
-      banner: 'Yapay Zeka Doktorun',
-      title: 'Tüm Doktorlar Elinin Altında!',
+      banner: 'Yapay Zeka Sağlık Asistanın',
+      title: 'Tüm Sağlıkçılar Elinin Altında!',
       start: 'Başla',
       aiBadge: 'Yapay Zeka Destekli',
       subtitle: '7/24 yapay zeka destekli sağlık asistanınız',
@@ -428,7 +428,7 @@ modafinil: 'Modafinil',
     
     // Assistants
     assistants: {
-      title: 'Doktorlar',
+      title: 'Sağlık Asistanları',
       dermatology: 'Dermatoloji Asistanı',
       cardiology: 'Kardiyoloji Asistanı',
       pediatrics: 'Çocuk Asistanı',

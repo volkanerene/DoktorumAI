@@ -1,26 +1,41 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  SafeAreaView, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator
+  SafeAreaView,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  RefreshControl,
 } from 'react-native';
 import axios from 'axios';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useLanguage } from '../context/LanguageContext';
+import { assistantS, getAssistantName } from '../data/assistantData';
+
+const BG_COLOR = '#09408B';
+const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 
 type HistoryProps = StackScreenProps<RootStackParamList, 'History'>;
 
 interface ChatItem {
+  id: number;
   specialty: string;
   role: 'user' | 'assistant';
   message: string;
   created_at: string;
 }
 
-const SERVER_URL = 'https://www.prokoc2.com/api2.php';
-
 export default function HistoryScreen({ route, navigation }: HistoryProps) {
   const userId = route.params?.userId;
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [history, setHistory] = useState<ChatItem[]>([]);
 
   useEffect(() => {
@@ -32,17 +47,20 @@ export default function HistoryScreen({ route, navigation }: HistoryProps) {
       const response = await axios.get(`${SERVER_URL}?action=getHistory&user_id=${userId}`);
       if (response.data.success) {
         setHistory(response.data.history);
-      } else {
-        alert(response.data.error || 'Geçmiş alınamadı.');
       }
     } catch (err) {
-      alert('Sunucuya bağlanılamadı.');
+      console.error('History fetch error:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Group messages by specialty
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchHistory();
+  };
+
   const groupedSpecialties = useMemo(() => {
     const grouped: Record<string, ChatItem[]> = {};
     history.forEach((item) => {
@@ -54,12 +72,9 @@ export default function HistoryScreen({ route, navigation }: HistoryProps) {
     return grouped;
   }, [history]);
 
-  // Convert the grouped object into an array for easier rendering
   const specialtyCards = useMemo(() => {
     return Object.keys(groupedSpecialties).map((specialty) => {
-      // We can find the last message by created_at or just display the count, etc.
       const messages = groupedSpecialties[specialty];
-      // Sort descending to find the last message
       messages.sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
@@ -73,7 +88,6 @@ export default function HistoryScreen({ route, navigation }: HistoryProps) {
     });
   }, [groupedSpecialties]);
 
-  // On press, navigate to Chat for that specialty
   const handlePressSpecialty = (specialty: string) => {
     navigation.navigate('Chat', {
       userId,
@@ -81,108 +95,169 @@ export default function HistoryScreen({ route, navigation }: HistoryProps) {
     });
   };
 
+  const getAssistantInfo = (specialty: string) => {
+    const assistant = assistantS.find(a => 
+      a.name === specialty || getAssistantName(a.nameKey, t) === specialty
+    );
+    return assistant || {
+      icon: 'help-outline',
+      color: '#667eea',
+      library: 'MaterialIcons' as const,
+    };
+  };
+
+  const renderSpecialtyCard = ({ item }: { item: typeof specialtyCards[0] }) => {
+    const assistant = getAssistantInfo(item.specialty);
+    
+    return (
+      <TouchableOpacity
+        style={styles.historyCard}
+        onPress={() => handlePressSpecialty(item.specialty)}
+      >
+        <View style={[styles.iconContainer, { backgroundColor: assistant.color }]}>
+          {assistant.library === 'MaterialIcons' ? (
+            <MaterialIcons name={assistant.icon} size={24} color="#fff" />
+          ) : (
+            <MaterialCommunityIcons name={assistant.icon} size={24} color="#fff" />
+          )}
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.specialtyTitle}>{item.specialty}</Text>
+          <Text style={styles.lastMessage} numberOfLines={1}>
+            {item.lastMessage}
+          </Text>
+          <Text style={styles.metaText}>
+            {item.totalCount} {t('common.messages')} • {new Date(item.lastDate).toLocaleDateString()}
+          </Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={24} color="#999" />
+      </TouchableOpacity>
+    );
+  };
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={{ color: '#fff', textAlign: 'center', marginTop: 30 }}>
-          Yükleniyor...
-        </Text>
-      </SafeAreaView>
+      <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
+        <SafeAreaView style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tüm Geçmiş</Text>
-      </View>
-
-      {specialtyCards.length === 0 ? (
-        <View style={{ marginTop: 30, alignItems: 'center' }}>
-          <Text style={{ color: '#fff' }}>Geçmiş bulunamadı.</Text>
+    <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>{t('common.history')}</Text>
         </View>
-      ) : (
-        specialtyCards.map((card) => (
-          <TouchableOpacity
-            key={card.specialty}
-            style={styles.historyCard}
-            onPress={() => handlePressSpecialty(card.specialty)}
-          >
-            <View style={styles.iconContainer}>
-              <MaterialCommunityIcons name="history" size={24} color="#000" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.specialtyTitle}>{card.specialty}</Text>
-              <Text style={styles.lastMessage} numberOfLines={1}>
-                Son Mesaj: {card.lastMessage}
-              </Text>
-              <Text style={styles.dateText}>Mesaj Sayısı: {card.totalCount}</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={28} color="#aaa" />
-          </TouchableOpacity>
-        ))
-      )}
-    </SafeAreaView>
+
+        {specialtyCards.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="history" size={64} color="#fff" />
+            <Text style={styles.emptyText}>{t('home.noRecentChats')}</Text>
+            <Text style={styles.emptySubtext}>{t('home.startChatting')}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={specialtyCards}
+            renderItem={renderSpecialtyCard}
+            keyExtractor={(item) => item.specialty}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#fff"
+              />
+            }
+          />
+        )}
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  backButton: {
-    fontSize: 24,
-    color: '#fff',
-    marginRight: 15,
+    paddingTop: 10,
+    paddingBottom: 20,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '700',
     color: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
   },
   historyCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#222',
-    marginHorizontal: 20,
-    marginTop: 10,
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#999',
-    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
-    marginRight: 10,
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  cardContent: {
+    flex: 1,
   },
   specialtyTitle: {
-    color: '#fff',
-    fontWeight: 'bold',
     fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
   lastMessage: {
-    color: '#ccc',
-    marginTop: 3,
-  },
-  dateText: {
+    fontSize: 14,
     color: '#666',
+    marginBottom: 4,
+  },
+  metaText: {
     fontSize: 12,
-    marginTop: 2,
+    color: '#999',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#fff',
+    marginTop: 16,
+    fontWeight: '600',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

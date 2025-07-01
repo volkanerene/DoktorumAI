@@ -12,7 +12,6 @@ function debugLog($message) {
     $debug[] = $message;
 }
 
-// Database config
 
 
 $conn = new mysqli($servername, $username, $password, $dbname);
@@ -55,8 +54,6 @@ function getUserProfile($userId) {
     }
     return $row;
 }
-
-// GPT-4 Vision API Key
 
 /**
  * callOpenAI with GPT-4 Vision support
@@ -436,7 +433,8 @@ class NobetciEczane {
         global $debug;
         debugLog("NobetciEczane::Find called with city=$city");
 
-        $apiKey = '..';
+        global $collectApiKey;
+        $apiKey = $collectApiKey;
         $url = 'https://www.nosyapi.com/apiv2/service/pharmacies-on-duty';
 
         $ch = curl_init();
@@ -485,46 +483,65 @@ if (isset($_GET['action'])) {
 
     switch ($action) {
         // Save user health data (onboarding)
-        case 'saveHealthData':
-            debugLog("saveHealthData route");
-            $input = json_decode(file_get_contents('php://input'), true);
-            if (!isset($input['user_id'], $input['health_data'])) {
-                handleError("user_id and health_data required.");
-            }
-            $language = isset($input['language']) ? $input['language'] : 'tr';
-            $userId = (int)$input['user_id'];
-            $healthData = $input['health_data'];
-            
-            // Convert health data to answers format for existing profile structure
-            $answers = [
-                'birthDate' => $healthData['birthDate'] ?? '',
-                'gender' => $healthData['gender'] ?? '',
-                'importantDiseases' => $healthData['importantDiseases'] ?? '',
-                'medications' => $healthData['medications'] ?? '',
-                'hadSurgery' => $healthData['hadSurgery'] ?? false,
-                'surgeryDetails' => $healthData['surgeryDetails'] ?? '',
-                'height' => $healthData['height'] ?? '',
-                'weight' => $healthData['weight'] ?? '',
-                'bloodType' => $healthData['bloodType'] ?? '',
-                'allergies' => $healthData['allergies'] ?? '',
-            ];
-            
-            $answersJson = json_encode($answers, JSON_UNESCAPED_UNICODE);
-            
-            $stmt = $conn->prepare("
-                INSERT INTO user_profile (user_id, answers)
-                VALUES (?, ?)
-                ON DUPLICATE KEY UPDATE answers = VALUES(answers)
-            ");
-            $stmt->bind_param("is", $userId, $answersJson);
-            
-            if ($stmt->execute()) {
-                echo json_encode(["success" => true, "message" => "Health data saved", "debug" => $debug]);
-            } else {
-                echo json_encode(["error" => "Failed to save health data: " . $stmt->error, "debug" => $debug]);
-            }
-            $stmt->close();
-            exit;
+case 'saveHealthData':
+    debugLog("saveHealthData route");
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (empty($input['user_id']) || empty($input['health_data'])) {
+        handleError("user_id and health_data required.");
+    }
+
+    $userId     = (int)$input['user_id'];
+    $healthData = $input['health_data'];
+
+    /* ——— 1) Kullanıcı adını güncelle ——— */
+    if (!empty($healthData['displayName'])) {
+        $q = $conn->prepare("UPDATE users3 SET name = ? WHERE id = ?");
+        $q->bind_param("si", $healthData['displayName'], $userId);
+        $q->execute();
+        $q->close();
+    }
+
+    /* ——— 2) user_profile verisi ——— */
+    $birthDate = !empty($healthData['birthDate'])
+        ? date('Y-m-d', strtotime($healthData['birthDate']))
+        : null;
+
+    $gender    = $healthData['gender']    ?? null;
+
+    // JSON-e dönüşecek cevaplar
+    $answers = [
+        'birthDate'        => $birthDate,
+        'gender'           => $gender,
+        'importantDiseases'=> $healthData['importantDiseases'] ?? '',
+        'medications'      => $healthData['medications'] ?? '',
+        'hadSurgery'       => $healthData['hadSurgery'] ?? false,
+        'surgeryDetails'   => $healthData['surgeryDetails'] ?? '',
+        'height'           => $healthData['height'] ?? '',
+        'weight'           => $healthData['weight'] ?? '',
+        'bloodType'        => $healthData['bloodType'] ?? '',
+        'allergies'        => $healthData['allergies'] ?? '',
+    ];
+    $answersJson = json_encode($answers, JSON_UNESCAPED_UNICODE);
+
+    /* Tek sorgu: INSERT varsa UPDATE */
+    $stmt = $conn->prepare("
+        INSERT INTO user_profile (user_id, gender, birth_date, answers)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            gender      = VALUES(gender),
+            birth_date  = VALUES(birth_date),
+            answers     = VALUES(answers)
+    ");
+    $stmt->bind_param("isss", $userId, $gender, $birthDate, $answersJson);
+
+    if ($stmt->execute()) {
+        echo json_encode(["success" => true, "message" => "Health data saved", "debug" => $debug]);
+    } else {
+        echo json_encode(["error" => "Failed: ".$stmt->error, "debug" => $debug]);
+    }
+    $stmt->close();
+    exit;
 
         // Upload profile photo
         case 'uploadProfilePhoto':
@@ -583,7 +600,159 @@ if (isset($_GET['action'])) {
             }
             $stmt->close();
             exit;
+// api2.php'de switch içine ekleyin:
 
+case 'getMedications':
+    $userId = $_GET['user_id'];
+    $stmt = $conn->prepare("
+        SELECT * FROM user_medications 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC
+    ");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $medications = [];
+    while ($row = $result->fetch_assoc()) {
+        $medications[] = [
+            'id' => $row['id'],
+            'name' => $row['name'],
+            'dosage' => $row['dosage'],
+            'frequency' => $row['frequency'],
+            'times' => json_decode($row['times']),
+            'start_date' => $row['start_date'],
+            'end_date' => $row['end_date'],
+            'notes' => $row['notes'],
+            'is_active' => $row['is_active'],
+            'color' => $row['color'],
+            'icon' => $row['icon']
+        ];
+    }
+    
+    echo json_encode(["success" => true, "medications" => $medications, "debug" => $debug]);
+    exit;
+
+case 'saveMedication':
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['user_id'];
+    $medication = $input['medication'];
+    
+    $stmt = $conn->prepare("
+        INSERT INTO user_medications 
+        (user_id, name, dosage, frequency, times, start_date, end_date, notes, is_active, color, icon)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    
+    $times = json_encode($medication['times']);
+    $isActive = $medication['is_active'] ? 1 : 0;
+    $types = "issssssisss";
+    $stmt->bind_param($types,
+        $userId,
+        $medication['name'],
+        $medication['dosage'],
+        $medication['frequency'],
+        $times,
+        $medication['start_date'],
+        $medication['end_date'],
+        $medication['notes'],
+        $isActive,
+        $medication['color'],
+        $medication['icon']
+    );
+    
+    if ($stmt->execute()) {
+        echo json_encode(["success" => true, "medication_id" => $stmt->insert_id, "debug" => $debug]);
+    } else {
+        echo json_encode(["error" => "Failed to save medication: " . $stmt->error, "debug" => $debug]);
+    }
+    $stmt->close();
+    exit;
+
+case 'updateMedication':
+    $input = json_decode(file_get_contents('php://input'), true);
+    $medicationId = $input['medication_id'];
+    $updates = $input['updates'];
+    
+    $stmt = $conn->prepare("
+        UPDATE user_medications 
+        SET is_active = ? 
+        WHERE id = ?
+    ");
+    
+    $isActive = $updates['is_active'] ? 1 : 0;
+    $stmt->bind_param("ii", $isActive, $medicationId);
+    
+    if ($stmt->execute()) {
+        echo json_encode(["success" => true, "debug" => $debug]);
+    } else {
+        echo json_encode(["error" => "Failed to update medication", "debug" => $debug]);
+    }
+    $stmt->close();
+    exit;
+
+case 'deleteMedication':
+    $input = json_decode(file_get_contents('php://input'), true);
+    $medicationId = $input['medication_id'];
+    
+    $stmt = $conn->prepare("DELETE FROM user_medications WHERE id = ?");
+    $stmt->bind_param("i", $medicationId);
+    
+    if ($stmt->execute()) {
+        echo json_encode(["success" => true, "debug" => $debug]);
+    } else {
+        echo json_encode(["error" => "Failed to delete medication", "debug" => $debug]);
+    }
+    $stmt->close();
+    exit;
+
+case 'recordMedicationTaken':
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['user_id'];
+    $medicationId = $input['medication_id'];
+    $takenTime = $input['taken_time'];
+    $takenDate = $input['taken_date'];
+    
+    $stmt = $conn->prepare("
+        INSERT INTO medication_history 
+        (user_id, medication_id, taken_date, taken_time, status)
+        VALUES (?, ?, ?, ?, 'taken')
+    ");
+    
+    $stmt->bind_param("iiss", $userId, $medicationId, $takenDate, $takenTime);
+    
+    if ($stmt->execute()) {
+        echo json_encode(["success" => true, "debug" => $debug]);
+    } else {
+        echo json_encode(["error" => "Failed to record medication taken", "debug" => $debug]);
+    }
+    $stmt->close();
+    exit;
+
+case 'getMedicationHistory':
+    $userId = $_GET['user_id'];
+    $days = isset($_GET['days']) ? intval($_GET['days']) : 7;
+    
+    $stmt = $conn->prepare("
+        SELECT mh.*, um.name, um.dosage 
+        FROM medication_history mh
+        JOIN user_medications um ON mh.medication_id = um.id
+        WHERE mh.user_id = ? 
+        AND mh.taken_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        ORDER BY mh.taken_date DESC, mh.taken_time DESC
+    ");
+    
+    $stmt->bind_param("ii", $userId, $days);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $history = [];
+    while ($row = $result->fetch_assoc()) {
+        $history[] = $row;
+    }
+    
+    echo json_encode(["success" => true, "history" => $history, "debug" => $debug]);
+    exit;
         // Save profile
         case 'saveProfile':
             debugLog("saveProfile route");
@@ -643,7 +812,9 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
             $stmt->close();
 
             $hashed = hashPassword($password);
-            $stmt = $conn->prepare("INSERT INTO users3 (name, email, password) VALUES (?, ?, ?)");
+            $stmt = $conn->prepare(
+            "INSERT INTO users3 (name,email,password,provider) VALUES (?,?,?,'email')"
+            );
             $stmt->bind_param("sss", $name, $email, $hashed);
             if ($stmt->execute()) {
                 echo json_encode(["success" => true, "message" => "Registration successful", "debug" => $debug]);
@@ -1072,72 +1243,235 @@ case 'login':
     
     echo json_encode($response);
     exit;
-        // Send message
-        case 'sendMessage':
-            debugLog("sendMessage route");
-            $input = json_decode(file_get_contents('php://input'), true);
-            if (!isset($input['user_id'], $input['specialty'], $input['user_message'])) {
-                handleError("user_id, specialty and user_message required.");
-            }
-            $userId = (int)$input['user_id'];
-            $specialty = trim($input['specialty']);
-            $userMessage = trim($input['user_message']);
-            $language = isset($input['language']) ? $input['language'] : 'tr';
-            $isHealthAssistant = isset($input['is_health_assistant']) ? $input['is_health_assistant'] : false;
 
-            // Insert user message
-            $stmt = $conn->prepare("
-                INSERT INTO user_chats3 (user_id, specialty, role, message) 
-                VALUES (?, ?, 'user', ?)
-            ");
-            $stmt->bind_param("iss", $userId, $specialty, $userMessage);
-            $stmt->execute();
-            $stmt->close();
-    if ($stmt2->execute()) {
-        // Kullanıcının bildirimlerini güncelle
-        scheduleUserNotifications($userId);
+
+    // subscription_info tablosunu kontrol eden yeni action ekle
+case 'checkSubscription':
+    $userId = $_GET['user_id'];
+    
+    $stmt = $conn->prepare("
+        SELECT * FROM subscription_info 
+        WHERE user_id = ? 
+        LIMIT 1
+    ");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($row = $result->fetch_assoc()) {
+        // Trial süresi kontrolü
+        if ($row['plan_type'] === 'trial' && $row['trial_end_date']) {
+            if (new DateTime($row['trial_end_date']) < new DateTime()) {
+                // Trial bitmiş, free'ye çevir
+                $updateStmt = $conn->prepare("
+                    UPDATE subscription_info 
+                    SET plan_type = 'free' 
+                    WHERE user_id = ?
+                ");
+                $updateStmt->bind_param("i", $userId);
+                $updateStmt->execute();
+                $row['plan_type'] = 'free';
+            }
+        }
+        
+        echo json_encode([
+            "success" => true,
+            "subscription" => $row,
+            "debug" => $debug
+        ]);
+    } else {
+        // Yoksa default free olarak oluştur
+        $insertStmt = $conn->prepare("
+            INSERT INTO subscription_info (user_id, plan_type) 
+            VALUES (?, 'free')
+        ");
+        $insertStmt->bind_param("i", $userId);
+        $insertStmt->execute();
+        
+        echo json_encode([
+            "success" => true,
+            "subscription" => [
+                "plan_type" => "free",
+                "daily_message_count" => 0
+            ],
+            "debug" => $debug
+        ]);
     }
-            // Call OpenAI
-            $assistantReply = callOpenAI($userId, $specialty, $userMessage, $language);
-            $messageType = isset($input['message_type']) ? $input['message_type'] : 'text';
-            
-            // Eğer sesli mesajsa, bunu belirt
-            if ($messageType === 'voice') {
-                $messageData = json_encode([
-                    'type' => 'voice',
-                    'text' => $userMessage,
-                    'timestamp' => date('Y-m-d H:i:s')
-                ], JSON_UNESCAPED_UNICODE);
-                
-                $stmt = $conn->prepare("
-                    INSERT INTO user_chats3 (user_id, specialty, role, message) 
-                    VALUES (?, ?, 'user', ?)
-                ");
-                $stmt->bind_param("iss", $userId, $specialty, $messageData);
-            } else {
-                // Normal text mesaj
-                $stmt = $conn->prepare("
-                    INSERT INTO user_chats3 (user_id, specialty, role, message) 
-                    VALUES (?, ?, 'user', ?)
-                ");
-                $stmt->bind_param("iss", $userId, $specialty, $userMessage);
-            }
-            // Insert assistant reply
-            $stmt2 = $conn->prepare("
-                INSERT INTO user_chats3 (user_id, specialty, role, message) 
-                VALUES (?, ?, 'assistant', ?)
-            ");
-            $stmt2->bind_param("iss", $userId, $specialty, $assistantReply);
-            $stmt2->execute();
-            $stmt2->close();
+    exit;
+    case 'updateSubscription':
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['user_id'];
+    $planType = $input['plan_type']; // 'trial' veya 'premium'
+    
+    if ($planType === 'trial') {
+        $trialStart = date('Y-m-d H:i:s');
+        $trialEnd = date('Y-m-d H:i:s', strtotime('+7 days'));
+        
+        $stmt = $conn->prepare("
+            INSERT INTO subscription_info 
+            (user_id, plan_type, trial_start_date, trial_end_date) 
+            VALUES (?, 'trial', ?, ?)
+            ON DUPLICATE KEY UPDATE 
+            plan_type = 'trial',
+            trial_start_date = VALUES(trial_start_date),
+            trial_end_date = VALUES(trial_end_date)
+        ");
+        $stmt->bind_param("iss", $userId, $trialStart, $trialEnd);
+    } else if ($planType === 'premium') {
+        $premiumStart = date('Y-m-d H:i:s');
+        
+        $stmt = $conn->prepare("
+            INSERT INTO subscription_info 
+            (user_id, plan_type, premium_start_date) 
+            VALUES (?, 'premium', ?)
+            ON DUPLICATE KEY UPDATE 
+            plan_type = 'premium',
+            premium_start_date = VALUES(premium_start_date)
+        ");
+        $stmt->bind_param("is", $userId, $premiumStart);
+    }
+    
+    if ($stmt->execute()) {
+        echo json_encode(["success" => true, "debug" => $debug]);
+    } else {
+        echo json_encode(["error" => "Failed to update subscription", "debug" => $debug]);
+    }
+    exit;
+// sendMessage case'ini güncelleyin:
+/* ============================================================
+ *  SEND MESSAGE
+ * ============================================================
+ */
+case 'sendMessage':
+    debugLog('sendMessage route');
 
+    // ---------- 1) JSON INPUT ------------------------------------------------
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!$input)                          handleError('Invalid JSON input');
+    if (!isset($input['user_id'],
+               $input['specialty'],
+               $input['user_message']))   handleError('user_id, specialty and user_message required.');
+
+    $userId            = intval($input['user_id']);
+    $specialty         = trim($input['specialty']);
+    $userMessage       = trim($input['user_message']);
+    $language          = $input['language']          ?? 'tr';
+    $isHealthAssistant = $input['is_health_assistant'] ?? false;
+
+    debugLog("Params: userId=$userId • specialty=$specialty • lang=$language");
+
+    // ---------- 2) FREE PLAN - GÜNLÜK MESAJ LİMİTİ ---------------------------
+    $subStmt = $conn->prepare(
+        "SELECT plan_type, daily_message_count, last_message_date
+         FROM   subscription_info
+         WHERE  user_id = ?
+         LIMIT  1"
+    );
+    $subStmt->bind_param("i", $userId);
+    $subStmt->execute();
+    $subRes = $subStmt->get_result();
+    $subscription = $subRes->fetch_assoc();
+    $subStmt->close();
+
+    if (!$subscription) {
+        // Eğer henüz abonelik satırı yoksa ekle (free plan varsayılan)
+        $conn->query("INSERT INTO subscription_info (user_id, plan_type)
+                      VALUES ($userId, 'free')");
+        $subscription = [
+            'plan_type'            => 'free',
+            'daily_message_count'  => 0,
+            'last_message_date'    => null
+        ];
+    }
+
+    $today = date('Y-m-d');
+    if ($subscription['plan_type'] === 'free') {
+        // Aynı gün mü?
+        if ($subscription['last_message_date'] !== $today) {
+            // Yeni gün → sayaç sıfırla
+            $conn->query("
+                UPDATE subscription_info
+                SET daily_message_count = 0,
+                    last_message_date   = '$today'
+                WHERE user_id = $userId
+            ");
+            $subscription['daily_message_count'] = 0;
+        }
+
+        // Limit: 3 mesaj / gün
+        if ($subscription['daily_message_count'] >= 3) {
             echo json_encode([
-                "success" => true,
-                "assistant_reply" => $assistantReply,
-                "debug" => $debug
+                "success"        => false,
+                "limit_reached"  => true,
+                "error"          => "Daily message limit reached",
+                "debug"          => $debug
             ]);
             exit;
+        }
+    }
 
+    // ---------- 3) USER MESAJINI DB’YE YAZ -----------------------------------
+    $stmt = $conn->prepare(
+        "INSERT INTO user_chats3 (user_id, specialty, role, message)
+         VALUES (?, ?, 'user', ?)"
+    );
+    if (!$stmt) handleError("DB prepare error (user msg): " . $conn->error);
+    $stmt->bind_param("iss", $userId, $specialty, $userMessage);
+    if (!$stmt->execute()) handleError("DB insert error (user msg): " . $stmt->error);
+    $stmt->close();
+
+    // ---------- 4) OPENAI’Yİ ÇAĞIR -------------------------------------------
+    try {
+        $assistantReply = callOpenAI($userId, $specialty, $userMessage, $language);
+    } catch (Exception $e) {
+        handleError("OpenAI error: " . $e->getMessage());
+    }
+
+    // ---------- 5) ASSISTANT MESAJINI DB’YE YAZ -------------------------------
+    $stmt = $conn->prepare(
+        "INSERT INTO user_chats3 (user_id, specialty, role, message)
+         VALUES (?, ?, 'assistant', ?)"
+    );
+    if (!$stmt) handleError("DB prepare error (assistant msg): " . $conn->error);
+    $stmt->bind_param("iss", $userId, $specialty, $assistantReply);
+    if (!$stmt->execute()) handleError("DB insert error (assistant msg): " . $stmt->error);
+    $stmt->close();
+
+    // ---------- 6) FREE PLAN SAYAÇ ARTIR -------------------------------------
+    if ($subscription['plan_type'] === 'free') {
+        $conn->query("
+            UPDATE subscription_info
+            SET daily_message_count = daily_message_count + 1,
+                last_message_date   = '$today'
+            WHERE user_id = $userId
+        ");
+    }
+
+    // ---------- 7) HEALTH-ASSISTANT İSE → NOTİFİKASYON PLANLA -----------------
+    if ($isHealthAssistant) {
+        scheduleUserNotifications($userId);
+    }
+
+    // ---------- 8) SPECIALIST RECOMMENDATION PARSE ---------------------------
+    $responseText = $assistantReply;
+    if ($isHealthAssistant) {
+        // Eğer JSON formatında öneri geldiyse aynen ilet
+        $tryJson = json_decode($assistantReply, true);
+        if (json_last_error() === JSON_ERROR_NONE &&
+            isset($tryJson['specialistRecommendation'])) {
+            $responseText = json_encode($tryJson, JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    // ---------- 9) RESPONSE --------------------------------------------------
+    echo json_encode([
+        "success"          => true,
+        "assistant_reply"  => $responseText,
+        "debug"            => $debug
+    ]);
+    break;   //  ← case 'sendMessage'
+
+    
         // Get profile
         case 'getProfile':
             debugLog("getProfile route");
@@ -1344,6 +1678,10 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
             exit;
 // api2.php içinde nobetciEczaneler case'ini güncelleyin:
 case 'nobetciEczaneler':
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'authorization: apikey '.$collectApiKey,
+    'content-type: application/json'
+]);
     debugLog("nobetciEczaneler route");
     $language = isset($input['language']) ? $input['language'] : 'tr';
     $city = isset($_GET['city']) ? trim($_GET['city']) : 'Istanbul';

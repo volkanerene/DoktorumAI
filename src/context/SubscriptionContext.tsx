@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import axios from 'axios';
 
 interface SubscriptionContextType {
   isPremium: boolean;
@@ -15,7 +16,7 @@ interface SubscriptionContextType {
   activateTrial: () => Promise<void>;
   activatePremium: () => Promise<void>;
 }
-
+const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 export const useSubscription = () => {
@@ -87,15 +88,42 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  const checkSubscriptionStatus = async () => {
-    try {
-      // Here you would check with your payment provider (RevenueCat, etc.)
-      // For now, we'll just check stored data
-      await initializeSubscription();
-    } catch (error) {
-      console.error('Error checking subscription:', error);
+// checkSubscriptionStatus fonksiyonunu güncelle
+const checkSubscriptionStatus = async () => {
+  try {
+    const response = await axios.get(
+      `${SERVER_URL}?action=checkSubscription&user_id=${userId}`
+    );
+    
+    if (response.data.success) {
+      const sub = response.data.subscription;
+      setIsPremium(sub.plan_type === 'premium' || sub.plan_type === 'trial');
+      setDailyMessageCount(sub.daily_message_count || 0);
+      
+      if (sub.trial_end_date) {
+        setTrialEndDate(new Date(sub.trial_end_date));
+      }
     }
-  };
+  } catch (error) {
+    console.error('Error checking subscription:', error);
+  }
+};
+
+// activateTrial fonksiyonunu güncelle
+const activateTrial = async () => {
+  try {
+    const response = await axios.post(`${SERVER_URL}?action=updateSubscription`, {
+      user_id: userId,
+      plan_type: 'trial'
+    });
+    
+    if (response.data.success) {
+      await checkSubscriptionStatus();
+    }
+  } catch (error) {
+    console.error('Error activating trial:', error);
+  }
+};
 
   const incrementMessageCount = async () => {
     if (isPremium) return; // No limit for premium users
@@ -119,19 +147,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }));
   };
 
-  const activateTrial = async () => {
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 7); // 7 days trial
-    
-    setTrialEndDate(endDate);
-    setIsPremium(true);
-    
-    await AsyncStorage.setItem('subscription_data', JSON.stringify({
-      isPremium: true,
-      trialEndDate: endDate.toISOString(),
-      trialStartDate: new Date().toISOString(),
-    }));
-  };
+
 
   const activatePremium = async () => {
     setIsPremium(true);

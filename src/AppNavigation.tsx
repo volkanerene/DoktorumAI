@@ -66,10 +66,10 @@ export type RootStackParamList = {
 };
 const iconMap: Record<string, string> = {
   Home:               'home',
-  Profile:            'person',
+  History:            'history',           // Yeni eklendi
   Chat:               'chat',
   NobetciEczaneler:   'local-pharmacy',
-  MedicationReminder: 'medication',         // veya 'medical-services'
+  Profile:            'person',            // En sağda olacak
 };
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -133,11 +133,11 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
 const TabBarButton = ({ route, label, isFocused, isCenter, options, onPress }: any) => {
   const animatedValue = useSharedValue(isFocused ? 1 : 0);
   const iconMap: Record<string, string> = {
-    Home: 'home',
-    Profile: 'person',
-    Chat: 'chat-bubble',
-    NobetciEczaneler: 'local-pharmacy',
-    MedicationReminder: 'medication',
+  Home:               'home',
+  History:            'history',           // Yeni eklendi
+  Chat:               'chat',
+  NobetciEczaneler:   'local-pharmacy',
+  Profile:            'person',      
   };
 
   React.useEffect(() => {
@@ -236,6 +236,7 @@ const TabBarButton = ({ route, label, isFocused, isCenter, options, onPress }: a
 function BottomTabNavigator({ route }: any) {
   const { userId, userName } = route.params || {};
   const { t } = useLanguage();
+  
   return (
     <Tab.Navigator
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -250,10 +251,10 @@ function BottomTabNavigator({ route }: any) {
         options={{ tabBarLabel: t('common.home') }}
       />
       <Tab.Screen
-        name="Profile"
-        component={ProfileScreen as React.ComponentType<any>}
+        name="History"
+        component={HistoryScreen as React.ComponentType<any>}
         initialParams={{ userId }}
-        options={{ tabBarLabel: t('common.profile') }}
+        options={{ tabBarLabel: t('common.history') }}
       />
       <Tab.Screen
         name="Chat"
@@ -262,15 +263,16 @@ function BottomTabNavigator({ route }: any) {
         options={{ tabBarLabel: t('common.assistant') }}
       />
       <Tab.Screen
-        name="History"
-        component={HistoryScreen as React.ComponentType<any>}
-        options={{ tabBarLabel: t('common.history') }}
-      />
-      <Tab.Screen
         name="MedicationReminder"
         component={MedicationReminderScreen as React.ComponentType<any>}
         initialParams={{ userId, userName }}
         options={{ tabBarLabel: t('common.medications') }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen as React.ComponentType<any>}
+        initialParams={{ userId }}
+        options={{ tabBarLabel: t('common.profile') }}
       />
     </Tab.Navigator>
   );

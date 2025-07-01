@@ -29,6 +29,7 @@ import SHA256 from 'crypto-js/sha256';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
+import { navigateAfterAuth } from '../utils/authNavigation';
 
 type LoginScreenProps = StackScreenProps<RootStackParamList, 'Login'>;
 const BG_COLOR = '#09408B';     
@@ -225,41 +226,25 @@ Alert.alert(t('common.error'), t('auth.networkError'));
 const handleGuestLogin = async () => {
   setLoading(true);
   try {
-    const guestId = 'guest_' + Date.now();
-    const guestName = t('common.guest');
-
-    // Önce backend'e kaydet
-    const response = await axios.post(`${SERVER_URL}?action=guestLogin`, {
-      guest_id: guestId,
-      guest_name: guestName,
+    const res = await axios.post(`${SERVER_URL}?action=guestLogin`, {
       language,
     });
 
-    if (response.data.success) {
-      // AsyncStorage'a kaydet
+    if (res.data.success) {
+      const { user_id, name } = res.data;
       await AsyncStorage.setItem(
         'userData',
-        JSON.stringify({
-          userId: response.data.user_id, // Backend'den gelen gerçek user ID
-          userName: guestName,
-          userType: 'guest',
-        })
+        JSON.stringify({ userId: String(user_id), userName: name, userType: 'guest' }),
       );
-      
+
       Alert.alert(t('common.success'), t('auth.guestSuccess'));
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'MainTabs', params: { userId: String(response.data.user_id), userName: guestName } }],
-      });
+
+      await navigateAfterAuth(navigation, String(user_id), name);   // 👈
     } else {
-      Alert.alert(t('common.error'), response.data.error || t('auth.guestError'));
+      Alert.alert(t('common.error'), res.data.error || t('auth.guestError'));
     }
-  } catch (error: any) {
-    console.error('Guest login error:', error);
-    Alert.alert(
-      t('common.error'), 
-      error.response?.data?.error || error.message || t('auth.guestError')
-    );
+  } catch (e) {
+    Alert.alert(t('common.error'), t('auth.guestError'));
   } finally {
     setLoading(false);
   }
@@ -601,7 +586,7 @@ const handleGoogleLogin = async () => {
   <TouchableOpacity
     style={styles.guestButton2}
     activeOpacity={0.85}
-    onPress={() => navigation.navigate('Signup')}
+      onPress={handleLogin}
   >
     <Text style={styles.guestButtonText2}>{t('first.start')}</Text>
     <MaterialIcons name="arrow-forward-ios" size={20} color="#667eea" />
