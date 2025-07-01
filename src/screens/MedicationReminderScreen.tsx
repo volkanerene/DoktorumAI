@@ -23,7 +23,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import NotificationService from '../services/NotificationService';
 import { useLanguage } from '../context/LanguageContext';
+import axios from 'axios';
 
+const BG_COLOR = '#09408B';      // yumuşak mavi
 
 const { width } = Dimensions.get('window');
 
@@ -75,6 +77,44 @@ const MEDICATION_COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#DDA0DD', '#98D8C8', '#F7DC6F'
 ];
 
+
+const MEDICATION_DOSAGES: Record<string, { defaultDosage: string; frequency: string; times: string[] }> = {
+  // Diyabet İlaçları
+  metformin: { defaultDosage: '500mg', frequency: 'twice', times: ['08:00', '20:00'] },
+  glifor: { defaultDosage: '850mg', frequency: 'twice', times: ['08:00', '20:00'] },
+  glucophage: { defaultDosage: '500mg', frequency: 'twice', times: ['08:00', '20:00'] },
+  insulin: { defaultDosage: '10 ünite', frequency: 'custom', times: ['07:00', '12:00', '18:00', '22:00'] },
+  
+  // Tansiyon İlaçları
+  beloc: { defaultDosage: '50mg', frequency: 'daily', times: ['08:00'] },
+  micardis: { defaultDosage: '80mg', frequency: 'daily', times: ['08:00'] },
+  coversyl: { defaultDosage: '5mg', frequency: 'daily', times: ['08:00'] },
+  norvasc: { defaultDosage: '5mg', frequency: 'daily', times: ['08:00'] },
+  
+  // Kalp İlaçları
+  aspirin: { defaultDosage: '100mg', frequency: 'daily', times: ['09:00'] },
+  plavix: { defaultDosage: '75mg', frequency: 'daily', times: ['09:00'] },
+  coraspin: { defaultDosage: '100mg', frequency: 'daily', times: ['09:00'] },
+  
+  // Kolesterol İlaçları
+  crestor: { defaultDosage: '10mg', frequency: 'daily', times: ['21:00'] },
+  lipitor: { defaultDosage: '20mg', frequency: 'daily', times: ['21:00'] },
+  atorvastatin: { defaultDosage: '20mg', frequency: 'daily', times: ['21:00'] },
+  
+  // Psikiyatri İlaçları
+  prozac: { defaultDosage: '20mg', frequency: 'daily', times: ['08:00'] },
+  cipralex: { defaultDosage: '10mg', frequency: 'daily', times: ['08:00'] },
+  lustral: { defaultDosage: '50mg', frequency: 'daily', times: ['08:00'] },
+  xanax: { defaultDosage: '0.5mg', frequency: 'custom', times: ['08:00', '14:00', '20:00'] },
+  
+  // Mide İlaçları
+  nexium: { defaultDosage: '40mg', frequency: 'daily', times: ['07:00'] },
+  lansor: { defaultDosage: '30mg', frequency: 'daily', times: ['07:00'] },
+  omeprol: { defaultDosage: '20mg', frequency: 'daily', times: ['07:00'] },
+  
+  // Diğer ilaçlar için varsayılan
+  default: { defaultDosage: '1 tablet', frequency: 'daily', times: ['09:00'] }
+};
 const MEDICATION_ICONS = [
   'medication', 'pill', 'healing', 'favorite', 'local-hospital', 'vaccines'
 ];
@@ -108,14 +148,69 @@ export default function MedicationReminderScreen({ route, navigation }: Medicati
     color: MEDICATION_COLORS[0],
     icon: MEDICATION_ICONS[0],
   });
-
+const SERVER_URL = 'https://www.prokoc2.com/api2.php';
   useEffect(() => {
     loadMedications();
+    loadProfileMedications(); 
     setupNotifications();
     calculateAdherence();
   }, []);
 
-
+const loadProfileMedications = async () => {
+  try {
+    // Profil bilgilerini al
+    const profileRes = await axios.get(`${SERVER_URL}?action=getProfile&user_id=${userId}`);
+    
+    if (profileRes.data.success && profileRes.data.profile?.answers) {
+      const answers = profileRes.data.profile.answers;
+      
+      // medications string'ini parse et
+      if (answers.medications) {
+        const medicationsList = answers.medications.split(',').map((m: string) => m.trim());
+        
+        // Mevcut ilaçları kontrol et
+        const existingMeds = await AsyncStorage.getItem(`medications_${userId}`);
+        const existing = existingMeds ? JSON.parse(existingMeds) : [];
+        
+        // Her ilaç için kontrol et ve ekle
+        medicationsList.forEach((medKey: string) => {
+          // "other:" prefix'li olanları atla
+          if (medKey.startsWith('other:')) return;
+          
+          // Zaten eklenmişse atla
+          if (existing.some((e: Medication) => e.name.toLowerCase() === medKey.toLowerCase())) return;
+          
+          // İlaç bilgilerini al
+          const medInfo = MEDICATION_DOSAGES[medKey] || MEDICATION_DOSAGES.default;
+          const medName = t(`onboarding.medicationsDict.${medKey}`) || medKey;
+          
+          // Yeni ilaç oluştur
+          const newMedication: Medication = {
+            id: Date.now().toString() + '_' + medKey,
+            name: medName,
+            dosage: medInfo.defaultDosage,
+            frequency: medInfo.frequency as any,
+            times: medInfo.times,
+            startDate: new Date(),
+            isActive: true,
+            color: MEDICATION_COLORS[existing.length % MEDICATION_COLORS.length],
+            icon: MEDICATION_ICONS[existing.length % MEDICATION_ICONS.length],
+            notes: 'Profil bilgilerinizden eklendi',
+          };
+          
+          existing.push(newMedication);
+        });
+        
+        // Güncel listeyi kaydet
+        if (existing.length > 0) {
+          await saveMedications(existing);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading profile medications:', error);
+  }
+};
 
   const loadMedications = async () => {
     try {
@@ -411,39 +506,44 @@ Alert.alert(t('common.success'), t('medication.medicationSaved'));
   };
 
   return (
+   <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.header}
-      >
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      {/* ---------- Header ---------- */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>İlaç Hatırlatıcı</Text>
-        <TouchableOpacity onPress={() => setShowAddModal(true)} style={styles.addButton}>
+
+        <Text style={styles.headerTitle}>{t('medication.title')}</Text>
+
+        <TouchableOpacity onPress={() => setShowAddModal(true)} style={styles.addBtn}>
           <MaterialIcons name="add" size={24} color="#fff" />
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Adherence Card */}
+      {/* ---------- İçerik ---------- */}
+      <ScrollView style={styles.content} >
+        {/* Haftalık uyum kartı */}
         <View style={styles.adherenceCard}>
-          <Text style={styles.adherenceTitle}>Haftalık Uyum</Text>
+          <Text style={styles.adherenceTitle}>{t('medication.weeklyAdherence')}</Text>
+
           <View style={styles.adherenceCircle}>
             <Text style={styles.adherencePercent}>{adherenceRate}%</Text>
           </View>
+
           <Text style={styles.adherenceSubtitle}>
-            Son 7 günde ilaçlarınızı alma oranınız
+            {t('medication.adherenceHint')}
           </Text>
         </View>
 
-        {/* Today's Schedule */}
+        {/* Bugünün programı */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bugünün Programı</Text>
+          <Text style={styles.sectionTitle}>{t('medication.todaySchedule')}</Text>
+
           {todayReminders.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialCommunityIcons name="calendar-check" size={48} color="#ccc" />
-              <Text style={styles.emptyText}>Bugün için hatırlatıcı yok</Text>
+              <Text style={styles.emptyText}>{t('medication.noReminder')}</Text>
             </View>
           ) : (
             <FlatList
@@ -455,16 +555,16 @@ Alert.alert(t('common.success'), t('medication.medicationSaved'));
           )}
         </View>
 
-        {/* My Medications */}
+        {/* İlaç listesi */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>İlaçlarım</Text>
+          <Text style={styles.sectionTitle}>{t('medication.myMeds')}</Text>
+
           {medications.length === 0 ? (
             <TouchableOpacity
               style={styles.emptyMedication}
-              onPress={() => setShowAddModal(true)}
-            >
+              onPress={() => setShowAddModal(true)}>
               <MaterialIcons name="add-circle-outline" size={48} color="#667eea" />
-              <Text style={styles.emptyMedText}>İlk ilacınızı ekleyin</Text>
+              <Text style={styles.emptyMedText}>{t('medication.addFirst')}</Text>
             </TouchableOpacity>
           ) : (
             <FlatList
@@ -510,6 +610,30 @@ Alert.alert(t('common.success'), t('medication.medicationSaved'));
                 onChangeText={(text) => setFormData({ ...formData, dosage: text })}
               />
 
+<Text style={styles.inputLabel}>Önerilen İlaçlar</Text>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestedMeds}>
+  {Object.keys(MEDICATION_DOSAGES).filter(key => key !== 'default').map((medKey) => {
+    const medName = t(`onboarding.medicationsDict.${medKey}`);
+    return (
+      <TouchableOpacity
+        key={medKey}
+        style={styles.suggestedMedChip}
+        onPress={() => {
+          const info = MEDICATION_DOSAGES[medKey];
+          setFormData({
+            ...formData,
+            name: medName,
+            dosage: info.defaultDosage,
+            frequency: info.frequency as any,
+            times: info.times,
+          });
+        }}
+      >
+        <Text style={styles.suggestedMedText}>{medName}</Text>
+      </TouchableOpacity>
+    );
+  })}
+</ScrollView>
               <Text style={styles.inputLabel}>Kullanım Sıklığı</Text>
               <View style={styles.frequencyOptions}>
                 {FREQUENCY_OPTIONS.map((option) => (
@@ -613,27 +737,27 @@ Alert.alert(t('common.success'), t('medication.medicationSaved'));
         </View>
       </Modal>
 
+
+      {/* ---------- Saat seçici ---------- */}
       {showDatePicker && (
         <DateTimePicker
           value={selectedDate}
           mode="time"
-          is24Hour={true}
+          is24Hour
           display="default"
           onChange={(event, date) => {
             setShowDatePicker(false);
             if (date) {
-              const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-              // Update the selected time
-              // This is simplified - you'd need to track which time slot is being edited
-              setFormData({
-                ...formData,
-                times: [timeStr],
-              });
+              const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(
+                date.getMinutes(),
+              ).padStart(2, '0')}`;
+              setFormData({ ...formData, times: [timeStr] });
             }
           }}
         />
       )}
     </SafeAreaView>
+  </View>
   );
 }
 
@@ -651,58 +775,56 @@ const generateDefaultTimes = (count: number): string[] => {
 };
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    marginBottom: 10,
   },
-  backButton: {
-    padding: 4,
+  backBtn: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: 20,
-    fontWeight: '600',
     color: '#fff',
+    fontWeight: 'bold',
   },
-  addButton: {
-    padding: 4,
+  addBtn: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,
   },
-  adherenceCard: {
-    backgroundColor: '#fff',
-    margin: 16,
-    padding: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  backButton: {
+    padding: 4,
   },
+
+  addButton: {
+    padding: 4,
+  },
+
   adherenceTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
     marginBottom: 16,
   },
-  adherenceCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#667eea',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
+
   adherencePercent: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -713,35 +835,8 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  section: {
-    marginHorizontal: 16,
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    marginTop: 8,
-  },
-  reminderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
+
+
   reminderTaken: {
     backgroundColor: '#E8F5E9',
   },
@@ -791,13 +886,7 @@ const styles = StyleSheet.create({
   skipButton: {
     backgroundColor: '#FF5252',
   },
-  medicationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-  },
+
   medicationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -836,15 +925,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#667eea',
   },
-  emptyMedication: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#667eea',
-    borderStyle: 'dashed',
-  },
+
   emptyMedText: {
     fontSize: 16,
     color: '#667eea',
@@ -980,4 +1061,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  // styles içinde güncelleyin:
+adherenceCard: {
+  backgroundColor: 'rgba(255,255,255,0.95)',
+  margin: 16,
+  padding: 24,
+  borderRadius: 20,
+  alignItems: 'center',
+  elevation: 4,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.15,
+  shadowRadius: 8,
+},
+
+adherenceCircle: {
+  width: 100,
+  height: 100,
+  borderRadius: 50,
+  backgroundColor: '#46B168', // Tema rengi
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 16,
+},
+
+medicationCard: {
+  backgroundColor: 'rgba(255,255,255,0.95)',
+  borderRadius: 16,
+  padding: 16,
+  marginBottom: 12,
+  borderLeftWidth: 4,
+  elevation: 2,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+},
+
+emptyMedication: {
+  backgroundColor: 'rgba(255,255,255,0.95)',
+  borderRadius: 16,
+  padding: 32,
+  alignItems: 'center',
+  borderWidth: 2,
+  borderColor: '#46B168',
+  borderStyle: 'dashed',
+},
+
+reminderCard: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: 'rgba(255,255,255,0.95)',
+  padding: 16,
+  borderRadius: 16,
+  marginBottom: 8,
+},
+
+section: {
+  marginHorizontal: 16,
+  marginBottom: 24,
+  backgroundColor: 'transparent',
+},
+
+sectionTitle: {
+  fontSize: 20,
+  fontWeight: '600',
+  color: '#fff',
+  marginBottom: 16,
+},
+// styles'a ekleyin:
+suggestedMeds: {
+  maxHeight: 50,
+  marginBottom: 16,
+},
+
+suggestedMedChip: {
+  backgroundColor: '#6B75D6',
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  borderRadius: 20,
+  marginRight: 8,
+},
+
+suggestedMedText: {
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: '500',
+},
+
+emptyState: {
+  alignItems: 'center',
+  paddingVertical: 32,
+  backgroundColor: 'rgba(255,255,255,0.95)',
+  borderRadius: 16,
+},
+
+emptyText: {
+  fontSize: 16,
+  color: '#666',
+  marginTop: 8,
+},
 });

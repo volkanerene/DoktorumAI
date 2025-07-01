@@ -29,7 +29,7 @@ import NotificationService from '../services/NotificationService';
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width, height } = Dimensions.get('window');
 type Gender = 'male' | 'female' | 'other';
-  const BG_COLOR = '#6B75D6';      // yumuşak mavi
+  const BG_COLOR = '#09408B';      // yumuşak mavi
 
 const DEFAULT_AVATAR: Record<Gender, string> = {
   male:   'https://www.prokoc2.com/assets/avatars/male.png',
@@ -71,34 +71,11 @@ interface HealthTip {
   color: string;
 }
 
-const healthTips: HealthTip[] = [
-  {
-    id: '1',
-    title: 'Günde 8 bardak su için',
-    description: 'Vücudunuzun hidrate kalması için yeterli su tüketin',
-    icon: 'local-drink',
-    color: '#42A5F5',
-  },
-  {
-    id: '2',
-    title: 'Düzenli egzersiz yapın',
-    description: 'Haftada en az 150 dakika orta yoğunlukta aktivite',
-    icon: 'fitness-center',
-    color: '#66BB6A',
-  },
-  {
-    id: '3',
-    title: 'Kaliteli uyku',
-    description: 'Günde 7-9 saat uyumaya özen gösterin',
-    icon: 'bedtime',
-    color: '#AB47BC',
-  },
-];
+
 
 export default function HomeScreen({ route, navigation }: any) {
   const userId = route.params?.userId || route.params?.userId;
   const userName = route.params?.userName || route.params?.userName || 'User';
-
   const [profilePhoto, setProfilePhoto] = useState<string>('');
   const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -121,7 +98,32 @@ const { t, language } = useLanguage();
     }, 5000);
     return () => clearInterval(id);
   }, [currentTip]);
-
+  const healthTips: HealthTip[] = useMemo(
+    () => [
+      {
+        id: '1',
+        title: t('home.waterTipTitle'),
+        description: t('home.waterTipDesc'),
+        icon: 'local-drink',
+        color: '#42A5F5',
+      },
+      {
+        id: '2',
+        title: t('home.exerciseTipTitle'),
+        description: t('home.exerciseTipDesc'),
+        icon: 'fitness-center',
+        color: '#66BB6A',
+      },
+      {
+        id: '3',
+        title: t('home.sleepTipTitle'),
+        description: t('home.sleepTipDesc'),
+        icon: 'bedtime',
+        color: '#AB47BC',
+      },
+    ],
+    [t],
+  );
   
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
@@ -181,11 +183,6 @@ if (profileRes.data.success && profileRes.data.profile) {
     return t('home.goodEvening');
   };
 
-  const getHealthScore = () => {
-    const score = Math.min(100, 60 + historyData.length * 2);
-    return score;
-  };
-
   const lastUserMessages = useMemo(() => {
     const grouped: Record<string, HistoryItem[]> = {};
     historyData.forEach((item) => {
@@ -215,7 +212,7 @@ if (profileRes.data.success && profileRes.data.profile) {
       const parsed = JSON.parse(raw);
       if (parsed?.caption) return parsed.caption;
       if (parsed?.text) return parsed.text;
-      return '(Görsel)';
+      return t('home.imagePlaceholder');
     } catch {
       return raw.length > 50 ? raw.slice(0, 50) + '…' : raw;
     }
@@ -261,8 +258,8 @@ if (profileRes.data.success && profileRes.data.profile) {
           />
         )}
 
-        <ScrollView
-          ref={scrollViewRef}
+        <View
+
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}>
 <Animated.View style={[styles.headerContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -427,27 +424,8 @@ if (profileRes.data.success && profileRes.data.profile) {
           )}
 
           <View style={{ height: 32 }} />
-        </ScrollView>
+        </View>
 
-        {/* Date Picker modal burada (renderDatePicker fonksiyonuyla) */}
-        {showDatePicker && (
-          <Modal transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
-            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowDatePicker(false)}>
-              <View style={styles.datePickerContainer}>
-                <View style={styles.datePickerHeader}>
-                  <Text style={styles.datePickerTitle}>{t('home.chooseDate')}</Text>
-                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                    <MaterialIcons name="close" size={24} color="#333" />
-                  </TouchableOpacity>
-                </View>
-                {/* Buraya istediğiniz datepicker bileşenini ekleyin */}
-                <TouchableOpacity style={styles.dateConfirmButton} onPress={() => setShowDatePicker(false)}>
-                  <Text style={styles.dateConfirmText}>{t('common.ok')}</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </Modal>
-        )}
 
     </View>
   );

@@ -31,6 +31,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
 
 type LoginScreenProps = StackScreenProps<RootStackParamList, 'Login'>;
+const BG_COLOR = '#09408B';     
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width: W, height: H } = Dimensions.get('window');
@@ -186,7 +187,7 @@ Alert.alert(t('common.error'), t('auth.passwordTooShort'));
                     navigation.reset({
                         index: 0,
                         routes: [{ 
-                            name: 'Home', 
+                            name: 'MainTabs', 
                             params: { 
                                 userId: String(response.data.user_id), 
                                 userName: response.data.name 
@@ -248,7 +249,7 @@ const handleGuestLogin = async () => {
       Alert.alert(t('common.success'), t('auth.guestSuccess'));
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Home', params: { userId: String(response.data.user_id), userName: guestName } }],
+        routes: [{ name: 'MainTabs', params: { userId: String(response.data.user_id), userName: guestName } }],
       });
     } else {
       Alert.alert(t('common.error'), response.data.error || t('auth.guestError'));
@@ -351,7 +352,7 @@ const handleGoogleLogin = async () => {
                     navigation.reset({
                         index: 0,
                         routes: [{ 
-                            name: 'Home', 
+                            name: 'MainTabs', 
                             params: { 
                                 userId: String(apiRes.data.user_id), 
                                 userName: apiRes.data.name 
@@ -415,7 +416,7 @@ const handleGoogleLogin = async () => {
           navigation.reset({
             index: 0,
             routes: [
-              { name: 'Home', params: { userId: res.data.user_id, userName: res.data.name } },
+              { name: 'MainTabs', params: { userId: res.data.user_id, userName: res.data.name } },
             ],
           });
         } else {
@@ -433,12 +434,8 @@ const handleGoogleLogin = async () => {
   };
 
   return (
-    <LinearGradient
-     colors={['#6B75D6','#46B168']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+    <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
+
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -599,28 +596,19 @@ const handleGoogleLogin = async () => {
               <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
                 <Text style={styles.forgotPasswordText}>{t('auth.forgotPassword')}</Text>
               </TouchableOpacity>
+              {/* Guest Login */}
 
-              {/* Login Button */}
-              <TouchableOpacity 
-                style={styles.loginButton}
-                onPress={handleLogin}
-                disabled={loading}
-              >
-                <LinearGradient
-                  colors={['#C8FF00', '#A8E000']}
-                  style={styles.loginButtonGradient}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#000" />
-                  ) : (
-                    <Text style={styles.loginButtonText}>{t('auth.login')}</Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-
+  <TouchableOpacity
+    style={styles.guestButton2}
+    activeOpacity={0.85}
+    onPress={() => navigation.navigate('Signup')}
+  >
+    <Text style={styles.guestButtonText2}>{t('first.start')}</Text>
+    <MaterialIcons name="arrow-forward-ios" size={20} color="#667eea" />
+  </TouchableOpacity>
               {/* Guest Login */}
               <TouchableOpacity style={styles.guestButton} onPress={handleGuestLogin}>
-                <MaterialIcons name="person-outline" size={20} color="#fff" />
+                <MaterialIcons name="person-outline" size={20} color="#667eea" />
                 <Text style={styles.guestButtonText}>{t('auth.guestLogin')}</Text>
               </TouchableOpacity>
 
@@ -662,7 +650,7 @@ const handleGoogleLogin = async () => {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -815,10 +803,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+    guestButton2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    borderWidth: 2,
+    borderColor: '#667eea',
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginBottom: 20,
+    gap: 8,
+  },
+  guestButtonText2: {
+    color: '#667eea',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   signupLink: {
     alignItems: 'center',
     marginBottom: 20,
   },
+
+
+/* ——— Start butonu guestButton ile AYNI ——— */
+startChip: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#C8FF00',   // ✅ sadece renk farkı
+  paddingHorizontal: 20,
+  paddingVertical: 10,
+  borderRadius: 30,             // ↔️ aynı köşe
+  gap: 8,
+},
+
+startChipText: {
+  color: '#000',
+  fontSize: 14,
+  fontWeight: '600',
+},
   signupText: {
     color: '#666',
     fontSize: 15,
@@ -871,4 +894,33 @@ const styles = StyleSheet.create({
   },
   logoImage: { width: 70, height: 70, resizeMode: 'contain' },
 
+startFab: {
+  width: 56,          // ⟵ 72 → 56
+  height: 56,         // ⟵ 72 → 56
+  borderRadius: 28,   // ⟵ 36 → 28
+  marginBottom: 16,   // bir tık yukarı çıksın
+  elevation: 6,
+  shadowColor: '#C8FF00',
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+},
+startFabGradient: {
+  flex: 1,
+  borderRadius: 28,   // aynı yarıçap
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+  loginLink: {
+    paddingVertical: 10,
+  },
+  loginLinkText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+    buttonContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
 });

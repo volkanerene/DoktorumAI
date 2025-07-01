@@ -16,6 +16,7 @@ import {
   Dimensions,
   Modal,
   Linking,
+  StatusBar,
 } from 'react-native';
 import axios from 'axios';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -35,6 +36,7 @@ import {
   ImageLibraryOptions,
   MediaType,
 } from 'react-native-image-picker';
+import LinearGradient from 'react-native-linear-gradient';
 
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width, height } = Dimensions.get('window');
@@ -69,7 +71,29 @@ interface Reference {
   source: string;
   url?: string;
 }
-
+// dosyanın üstünde bir yerde:
+const AuroraBackground = () => (
+  <>
+    <LinearGradient
+      colors={['rgba(107,117,214,0.55)', 'rgba(107,117,214,0)']}
+      style={[styles.auroraBlob, { top: -90, left: -120, width: 260, height: 260, transform:[{rotate:'25deg'}] }]}
+      start={{x:0.2, y:0}}
+      end={{x:1, y:1}}
+    />
+    <LinearGradient
+      colors={['rgba(70,177,104,0.50)', 'rgba(70,177,104,0)']}
+      style={[styles.auroraBlob, { top: -40, right: -130, width: 220, height: 220, transform:[{rotate:'-20deg'}] }]}
+      start={{x:1, y:0}}
+      end={{x:0, y:1}}
+    />
+    <LinearGradient
+      colors={['rgba(200,255,0,0.45)', 'rgba(200,255,0,0)']}
+      style={[styles.auroraBlob, { bottom: -70, left: '30%', width: 280, height: 280, transform:[{rotate:'15deg'}] }]}
+      start={{x:0, y:1}}
+      end={{x:1, y:0}}
+    />
+  </>
+);
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { userId, assistantName } = route.params;
   const { t, language } = useLanguage();
@@ -467,7 +491,6 @@ Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
 
   const handleImagePickFromGallery = () => {
     if (!canSendImage) {
-      Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
       setShowUpgradeModal(true);
       return;
     }
@@ -486,7 +509,6 @@ Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
 
   const handleCameraCapture = async () => {
     if (!canSendImage) {
-      Alert.alert(t('common.warning'), t('chat.imageNotAllowed'));
       setShowUpgradeModal(true);
       return;
     }
@@ -504,7 +526,7 @@ Alert.alert(t('common.error'), t('chat.voiceNotAvailable'));
         height: image.height,
         mime: image.mime,
         fileName: image.filename || `image_${Date.now()}.jpg`,
-        base64: image.data,
+        base64: (image as any).data,
       } as any);
     } catch (e: any) {
       if (e.code !== 'E_PICKER_CANCELLED') {
@@ -671,246 +693,252 @@ Alert.alert(t('common.error'), t('chat.uploadError'));
       <Text style={styles.quickActionText}>{text}</Text>
     </TouchableOpacity>
   );
+return (
+  <SafeAreaView style={styles.safeArea}>
+    {/* HEADER */}
+    <View style={styles.headerWrapper}>
+      {/* aurora efekt katmanı */}
+      <AuroraBackground />
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
-      >
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: color }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-            <MaterialIcons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerText}>{displayName}</Text>
-            <Text style={styles.headerSubtext}>{t('chat.online')} • {t('chat.responding')}</Text>
-          </View>
-          <TouchableOpacity style={styles.headerButton}>
-            <MaterialIcons name="more-vert" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
+      {/* gerçek içerik */}
+      <View style={styles.headerContent}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
 
-        {/* Messages */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          style={styles.chat}
-          contentContainerStyle={styles.chatContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <View style={[styles.emptyIcon, { backgroundColor: color + '20' }]}>
-                {library === 'MaterialIcons' ? (
-                  <MaterialIcons name={icon} size={48} color={color} />
-                ) : (
-                  <MaterialCommunityIcons name={icon} size={48} color={color} />
-                )}
-              </View>
-              <Text style={styles.emptyTitle}>
-                {displayName} {t('chat.startChat')}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {t('chat.askQuestions')}
-              </Text>
-            </View>
-          }
-        />
-
-        {/* Quick Actions */}
-        {showQuickActions && isHealthAssistant && messages.length <= 1 && (
-          <Animated.View style={[styles.quickActions, { opacity: fadeAnim }]}>
-            <QuickActionButton
-              icon="lightbulb-outline"
-              text={t('chat.symptoms')}
-              onPress={() => setUserMessage(t('chat.symptoms') + ' ')}
-            />
-            <QuickActionButton
-              icon="history"
-              text={t('chat.labResult')}
-              onPress={() => setUserMessage(t('chat.labResult'))}
-            />
-            <QuickActionButton
-              icon="help-outline"
-              text={t('chat.generalQuestion')}
-              onPress={() => setUserMessage(t('chat.generalQuestion') + ' ')}
-            />
-          </Animated.View>
-        )}
-
-        {/* Selected image preview */}
-        {selectedImage && (
-          <View style={styles.previewContainer}>
-            <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
-            <TouchableOpacity
-              onPress={() => setSelectedImage(null)}
-              style={styles.removeImageButton}
-            >
-              <MaterialIcons name="close" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Message limit warning */}
-        {!isPremium && dailyMessageCount >= dailyMessageLimit - 1 && (
-          <View style={styles.limitWarning}>
-            <Text style={styles.limitWarningText}>
-              {t('chat.messageLimitReached').replace('{count}', `${dailyMessageLimit - dailyMessageCount}`)}
-            </Text>
-          </View>
-        )}
-
-        {/* Input */}
-        <View style={styles.inputWrapper}>
-          <View style={styles.inputContainer}>
-            <TouchableOpacity 
-              onPress={handleCameraCapture} 
-              disabled={loading} 
-              style={styles.inputButton}
-            >
-              <MaterialIcons name="camera-alt" size={24} color="#666" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              onPress={handleImagePickFromGallery} 
-              disabled={loading} 
-              style={styles.inputButton}
-            >
-              <MaterialIcons name="photo" size={24} color="#666" />
-            </TouchableOpacity>
-            
-<TouchableOpacity 
-  onPress={handleVoiceMessage} 
-  disabled={loading} 
-  style={[
-    styles.inputButton,
-    isListening && styles.inputButtonActive
-  ]}
->
-  <MaterialIcons 
-    name={isListening ? "mic" : "mic-none"} 
-    size={24} 
-    color={isListening ? "#FF0000" : "#666"} 
-  />
-  {isListening && (
-    <Animated.View style={styles.listeningIndicator} />
-  )}
-</TouchableOpacity>
-            
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              placeholder={t('chat.placeholder')}
-              placeholderTextColor="#999"
-              value={userMessage}
-              onChangeText={setUserMessage}
-              editable={!loading && !isListening}
-              multiline
-              maxLength={1000}
-              onFocus={() => setShowQuickActions(false)}
-              onBlur={() => messages.length === 0 && setShowQuickActions(true)}
-            />
-            
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                (!userMessage.trim() && !selectedImage) && styles.sendButtonDisabled
-              ]}
-              onPress={handleSend}
-              disabled={loading || (!userMessage.trim() && !selectedImage)}
-            >
-              <MaterialIcons 
-                name="send" 
-                size={24} 
-                color={userMessage.trim() || selectedImage ? '#fff' : '#999'} 
-              />
-            </TouchableOpacity>
-          </View>
-          
-          <Text style={styles.disclaimer}>
-            {t('chat.disclaimer')}
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerText}>{displayName}</Text>
+          <Text style={styles.headerSubtext}>
+            {t('chat.online')} • {t('chat.responding')}
           </Text>
         </View>
-      </KeyboardAvoidingView>
 
-      {/* References Modal */}
-      <Modal
-        visible={showReferences}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowReferences(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('lab.references')}</Text>
-              <TouchableOpacity onPress={() => setShowReferences(false)}>
-                <MaterialIcons name="close" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
-            
-            <FlatList
-              data={selectedReferences}
-              keyExtractor={(item) => item.index.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.referenceItem}
-                  onPress={() => item.url && Linking.openURL(item.url)}
-                >
-                  <Text style={styles.referenceIndex}>[{item.index}]</Text>
-                  <Text style={styles.referenceSource}>{item.source}</Text>
-                  {item.url && (
-                    <MaterialIcons name="open-in-new" size={16} color="#007BFF" />
-                  )}
-                </TouchableOpacity>
+        <TouchableOpacity style={styles.headerButton}>
+          <MaterialIcons name="more-vert" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </View>
+        <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+    >
+
+      {/* ────────────── Mesaj Listesi ────────────── */}
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item) => item.id}
+        renderItem={renderMessage}
+        style={styles.chat}
+        contentContainerStyle={styles.chatContent}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <View style={[styles.emptyIcon, { backgroundColor: color + '20' }]}>
+              {library === 'MaterialIcons' ? (
+                <MaterialIcons name={icon} size={48} color={color} />
+              ) : (
+                <MaterialCommunityIcons name={icon} size={48} color={color} />
               )}
-            />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {displayName} {t('chat.startChat')}
+            </Text>
+            <Text style={styles.emptySubtitle}>{t('chat.askQuestions')}</Text>
           </View>
-        </View>
-      </Modal>
+        }
+      />
 
-      {/* Upgrade Modal */}
-      <Modal
-        visible={showUpgradeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowUpgradeModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.upgradeModalContent}>
-            <MaterialIcons name="workspace-premium" size={64} color="#FFD700" />
-            <Text style={styles.upgradeTitle}>
-              {!canSendMessage ? t('chat.messageLimitReached') : t('chat.imageNotAllowed')}
-            </Text>
-            <Text style={styles.upgradeSubtitle}>
-              {t('subscription.subtitle')}
-            </Text>
-            
-            <TouchableOpacity
-              style={styles.upgradeButton}
-              onPress={() => {
-                setShowUpgradeModal(false);
-                navigation.navigate('Subscription', { userId, userName: '' });
-              }}
-            >
-              <Text style={styles.upgradeButtonText}>{t('chat.upgradeNow')}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.laterButton}
-              onPress={() => setShowUpgradeModal(false)}
-            >
-              <Text style={styles.laterButtonText}>{t('subscription.notNow')}</Text>
+      {/* ───────────── Hızlı Aksiyonlar ───────────── */}
+      {showQuickActions && isHealthAssistant && messages.length <= 1 && (
+        <Animated.View style={[styles.quickActions, { opacity: fadeAnim }]}>
+          <QuickActionButton
+            icon="lightbulb-outline"
+            text={t('chat.symptoms')}
+            onPress={() => setUserMessage(t('chat.symptoms') + ' ')}
+          />
+          <QuickActionButton
+            icon="history"
+            text={t('chat.labResult')}
+            onPress={() => setUserMessage(t('chat.labResult'))}
+          />
+          <QuickActionButton
+            icon="help-outline"
+            text={t('chat.generalQuestion')}
+            onPress={() => setUserMessage(t('chat.generalQuestion') + ' ')}
+          />
+        </Animated.View>
+      )}
+
+      {/* ─────────── Seçili Görsel Önizleme ─────────── */}
+      {selectedImage && (
+        <View style={styles.previewContainer}>
+          <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
+          <TouchableOpacity
+            onPress={() => setSelectedImage(null)}
+            style={styles.removeImageButton}
+          >
+            <MaterialIcons name="close" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ─────────── Mesaj Limiti Uyarısı ─────────── */}
+      {!isPremium && dailyMessageCount >= dailyMessageLimit - 1 && (
+        <View style={styles.limitWarning}>
+          <Text style={styles.limitWarningText}>
+            {t('chat.messageLimitReached').replace(
+              '{count}',
+              `${dailyMessageLimit - dailyMessageCount}`,
+            )}
+          </Text>
+        </View>
+      )}
+
+      {/* ────────────────── Giriş Alanı ────────────────── */}
+      <View style={styles.inputWrapper}>
+        <View style={styles.inputContainer}>
+          <TouchableOpacity
+            onPress={handleCameraCapture}
+            disabled={loading}
+            style={styles.inputButton}
+          >
+            <MaterialIcons name="camera-alt" size={24} color="#666" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleImagePickFromGallery}
+            disabled={loading}
+            style={styles.inputButton}
+          >
+            <MaterialIcons name="photo" size={24} color="#666" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleVoiceMessage}
+            disabled={loading}
+            style={[
+              styles.inputButton,
+              isListening && styles.inputButtonActive,
+            ]}
+          >
+            <MaterialIcons
+              name={isListening ? 'mic' : 'mic-none'}
+              size={24}
+              color={isListening ? '#FF0000' : '#666'}
+            />
+            {isListening && <Animated.View style={styles.listeningIndicator} />}
+          </TouchableOpacity>
+
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder={t('chat.placeholder')}
+            placeholderTextColor="#999"
+            value={userMessage}
+            onChangeText={setUserMessage}
+            editable={!loading && !isListening}
+            multiline
+            maxLength={1000}
+            onFocus={() => setShowQuickActions(false)}
+            onBlur={() => messages.length === 0 && setShowQuickActions(true)}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              !userMessage.trim() && !selectedImage && styles.sendButtonDisabled,
+            ]}
+            onPress={handleSend}
+            disabled={loading || (!userMessage.trim() && !selectedImage)}
+          >
+            <MaterialIcons
+              name="send"
+              size={24}
+              color={userMessage.trim() || selectedImage ? '#fff' : '#999'}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.disclaimer}>{t('chat.disclaimer')}</Text>
+      </View>
+    </KeyboardAvoidingView>
+
+    {/* ─────────────── Kaynak/Referans Modal ─────────────── */}
+    <Modal
+      visible={showReferences}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowReferences(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('lab.references')}</Text>
+            <TouchableOpacity onPress={() => setShowReferences(false)}>
+              <MaterialIcons name="close" size={24} color="#000" />
             </TouchableOpacity>
           </View>
+
+          <FlatList
+            data={selectedReferences}
+            keyExtractor={(item) => item.index.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.referenceItem}
+                onPress={() => item.url && Linking.openURL(item.url)}
+              >
+                <Text style={styles.referenceIndex}>[{item.index}]</Text>
+                <Text style={styles.referenceSource}>{item.source}</Text>
+                {item.url && (
+                  <MaterialIcons name="open-in-new" size={16} color="#007BFF" />
+                )}
+              </TouchableOpacity>
+            )}
+          />
         </View>
-      </Modal>
-    </SafeAreaView>
-  );
+      </View>
+    </Modal>
+
+    {/* ─────────────── Premium Yükseltme Modal ─────────────── */}
+    <Modal
+      visible={showUpgradeModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowUpgradeModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.upgradeModalContent}>
+          <MaterialIcons name="workspace-premium" size={64} color="#FFD700" />
+          <Text style={styles.upgradeTitle}>
+            {!canSendMessage
+              ? t('chat.messageLimitReached')
+              : t('chat.imageNotAllowed')}
+          </Text>
+          <Text style={styles.upgradeSubtitle}>{t('subscription.subtitle')}</Text>
+
+          <TouchableOpacity
+            style={styles.upgradeButton}
+            onPress={() => {
+              setShowUpgradeModal(false);
+              navigation.navigate('Subscription', { userId, userName: '' });
+            }}
+          >
+            <Text style={styles.upgradeButtonText}>{t('chat.upgradeNow')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.laterButton}
+            onPress={() => setShowUpgradeModal(false)}
+          >
+            <Text style={styles.laterButtonText}>{t('subscription.notNow')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  </SafeAreaView>
+);
 }
 
 const styles = StyleSheet.create({
@@ -927,6 +955,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
+
+  },
+    headerGradient: {
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -936,6 +967,21 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 4,
   },
+  headerWrapper: {
+  backgroundColor: '#000',      // geçişler altta transparan bitsin diye koyu tut
+  paddingBottom: 12,
+},
+headerContent: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 16,
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
+},
+auroraBlob: {
+  position: 'absolute',
+  borderRadius: 9999,
+  opacity: 0.8,
+},
   headerCenter: {
     flex: 1,
     alignItems: 'center',

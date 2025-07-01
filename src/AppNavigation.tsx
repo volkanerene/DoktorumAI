@@ -1,13 +1,21 @@
-// src/AppNavigation.tsx
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withSpring,
-  withTiming,
-  interpolate,
-  Extrapolate 
-} from 'react-native-reanimated';
-import React, { useState } from 'react';
+ import Animated, {
+   useSharedValue,
+   useAnimatedStyle,
+   withSpring,
+   interpolate,
+
+ } from 'react-native-reanimated';
+
+ // Orb için klasik Animated:
+ import {
+   Platform,
+   StyleSheet,
+   TouchableOpacity,
+   View,
+   Animated as RNAnimated,   // <-- alias verdik
+ } from 'react-native';
+
+import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -33,7 +41,6 @@ import EmergencySOSScreen from './screens/EmergencySOSScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
 import MedicationReminderScreen from './screens/MedicationReminderScreen';
-import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 
 export type RootStackParamList = {
@@ -51,7 +58,7 @@ export type RootStackParamList = {
   History: { userId: string };
   NobetciEczaneler: undefined;
   Profile: { userId: string };
-  Onboarding: { userId: string; userName: string };
+  Onboarding: { userId: string; userName: string; allowNameEdit?: boolean };
   Subscription: { userId: string; userName: string };
   MedicationReminder: { userId: string; userName: string };
   MedicationDetail: { medication: any };
@@ -67,10 +74,10 @@ const iconMap: Record<string, string> = {
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
-// Custom Tab Bar Component
+
+
+
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  
   return (
     <View style={styles.tabBarContainer}>
       {/* Blur Background for iOS */}
@@ -84,6 +91,8 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
       ) : (
         <View style={[StyleSheet.absoluteFillObject, styles.androidTabBackground]} />
       )}
+      
+
       
       <View style={styles.tabBarContent}>
         {state.routes.map((route: any, index: number) => {
@@ -121,7 +130,6 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   );
 };
 
-// Animated Tab Button Component
 const TabBarButton = ({ route, label, isFocused, isCenter, options, onPress }: any) => {
   const animatedValue = useSharedValue(isFocused ? 1 : 0);
   const iconMap: Record<string, string> = {
@@ -147,16 +155,16 @@ const TabBarButton = ({ route, label, isFocused, isCenter, options, onPress }: a
             scale: interpolate(
               animatedValue.value,
               [0, 1],
-              [1, 1.1],
-              Extrapolate.CLAMP
+              [1, 1.15],
+             'clamp'
             ),
           },
           {
             translateY: interpolate(
               animatedValue.value,
               [0, 1],
-              [0, -5],
-              Extrapolate.CLAMP
+              [0, -8],
+              'clamp'
             ),
           },
         ],
@@ -169,19 +177,9 @@ const TabBarButton = ({ route, label, isFocused, isCenter, options, onPress }: a
     opacity: interpolate(
       animatedValue.value,
       [0, 1],
-      [0.6, 1],
-      Extrapolate.CLAMP
+      [0.7, 1],
+      'clamp'
     ),
-    transform: [
-      {
-        scale: interpolate(
-          animatedValue.value,
-          [0, 1],
-          [0.8, 1],
-          Extrapolate.CLAMP
-        ),
-      },
-    ],
   }));
 
   if (isCenter) {
@@ -190,26 +188,30 @@ const TabBarButton = ({ route, label, isFocused, isCenter, options, onPress }: a
         onPress={onPress}
         style={styles.centerTabButton}
         activeOpacity={0.8}
+        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
-        <Animated.View style={[styles.centerButtonContainer, animatedContainerStyle]}>
-          <LinearGradient
-            colors={isFocused ? ['#667eea', '#764ba2'] : ['#4a5568', '#2d3748']}
+        <Animated.View
+          style={[
+            styles.centerButtonContainer,
+            animatedContainerStyle,
+            { transform: [{ translateY: interpolate(animatedValue.value, [0, 1], [0, -6], 'clamp') }] }
+          ]}
+        ><LinearGradient
+            colors={isFocused ? ['#C8FF00', '#A8E000'] : ['#667eea', '#764ba2']}
             style={styles.centerButtonGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <MaterialIcons 
               name={iconMap[route.name] || 'help'} 
-              size={28} 
-              color="#fff" 
+              size={30} 
+              color={isFocused ? '#000' : '#fff'} 
             />
-            {isFocused && (
-              <Animated.View 
-                style={[styles.centerButtonGlow, animatedTextStyle]} 
-              />
-            )}
           </LinearGradient>
         </Animated.View>
+        <Animated.Text style={[styles.centerTabLabel, animatedTextStyle]}>
+          {label}
+        </Animated.Text>
       </TouchableOpacity>
     );
   }
@@ -220,21 +222,17 @@ const TabBarButton = ({ route, label, isFocused, isCenter, options, onPress }: a
       style={styles.tabButton}
       activeOpacity={0.7}
     >
-      <Animated.View style={animatedContainerStyle}>
-        <MaterialIcons
-          name={iconMap[route.name] || 'help'}
-          size={24}
-          color={isFocused ? '#667eea' : '#718096'}
-        />
-        <Animated.Text style={[styles.tabLabel, animatedTextStyle, isFocused && styles.tabLabelFocused]}>
-          {label}
-        </Animated.Text>
-      </Animated.View>
+      <MaterialIcons
+        name={iconMap[route.name] || 'help'}
+        size={24}
+        color={isFocused ? '#667eea' : '#718096'}
+      />
+      <Animated.Text style={[styles.tabLabel, animatedTextStyle, isFocused && styles.tabLabelFocused]}>
+        {label}
+      </Animated.Text>
     </TouchableOpacity>
   );
 };
-
-// Updated BottomTabNavigator
 function BottomTabNavigator({ route }: any) {
   const { userId, userName } = route.params || {};
   const { t } = useLanguage();
@@ -264,9 +262,9 @@ function BottomTabNavigator({ route }: any) {
         options={{ tabBarLabel: t('common.assistant') }}
       />
       <Tab.Screen
-        name="NobetciEczaneler"
-        component={NobetciEczanelerScreen as React.ComponentType<any>}
-        options={{ tabBarLabel: t('common.pharmacy') }}
+        name="History"
+        component={HistoryScreen as React.ComponentType<any>}
+        options={{ tabBarLabel: t('common.history') }}
       />
       <Tab.Screen
         name="MedicationReminder"
@@ -308,18 +306,16 @@ export default function AppNavigation() {
 // Add these styles to your StyleSheet
 const styles = StyleSheet.create({
   // ... existing styles ...
-  
-  // Custom Tab Bar Styles
   tabBarContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: Platform.OS === 'ios' ? 85 : 70,
+    height: Platform.OS === 'ios' ? 85 : 75,
     backgroundColor: 'transparent',
   },
   androidTabBackground: {
-    backgroundColor: 'rgba(26, 26, 26, 0.95)',
+    backgroundColor: 'rgba(26, 26, 26, 0.98)',
     borderTopWidth: 0.5,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -328,53 +324,100 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 10,
     paddingBottom: Platform.OS === 'ios' ? 20 : 10,
-    paddingTop: 10,
+    paddingTop: 8,
+    alignItems: 'center',
   },
+  
+  // Tab Buttons
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
   },
   tabLabel: {
     fontSize: 11,
     marginTop: 4,
     color: '#718096',
     fontWeight: '500',
+    textAlign: 'center',
   },
   tabLabelFocused: {
     color: '#667eea',
     fontWeight: '600',
   },
+  
+  // Center Tab Button
   centerTabButton: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginTop: -15,
+    justifyContent: 'center',
+    marginTop: -20,
   },
   centerButtonContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     elevation: 8,
-    shadowColor: '#667eea',
+    shadowColor: '#C8FF00',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
   },
   centerButtonGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 32,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  centerButtonGlow: {
+  centerTabLabel: {
+    fontSize: 11,
+    marginTop: 6,
+    color: '#718096',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  
+  // Orb Styles
+  orbContainer: {
     position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(102, 126, 234, 0.3)',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    top: -60,
+    alignSelf: 'center',
   },
+  orb: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 75,
+    opacity: 0.3,
+  },
+// Stiller
+orbSmall: {
+  position: 'absolute',
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  top: -20,
+  left: 40,
+  opacity: 0.4,
+},
+orbMedium: {
+  position: 'absolute',
+  width: 80,
+  height: 80,
+  borderRadius: 40,
+  top: -30,
+  right: 40,
+  opacity: 0.3,
+},
+orbGradient: {
+  width: '100%',
+  height: '100%',
+  borderRadius: 100,
+},
 });

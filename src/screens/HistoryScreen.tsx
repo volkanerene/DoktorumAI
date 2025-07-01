@@ -19,7 +19,7 @@ interface ChatItem {
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 
 export default function HistoryScreen({ route, navigation }: HistoryProps) {
-  const { userId } = route.params;
+  const userId = route.params?.userId;
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<ChatItem[]>([]);
 
@@ -186,7 +186,3 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
-function alert(arg0: any) {
-  throw new Error('Function not implemented.');
-}
-

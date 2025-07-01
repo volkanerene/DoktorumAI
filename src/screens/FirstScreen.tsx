@@ -18,10 +18,8 @@ import { useLanguage } from '../context/LanguageContext';
 import LinearGradient from 'react-native-linear-gradient';
 const Logo = require('../assets/logo-icon.png');
 const { width: W, height: H } = Dimensions.get('window');
-// Arka plan için sakin, “sağlık” hissi veren birkaç öneri — comment satırı:
-  const BG_COLOR = '#6B75D6';      // yumuşak mavi
-//  const BG_COLOR = '#A0AEC0';      // nötr gri-mavi
-//const BG_COLOR = '#5BC0BE';          // seçili varsayılan
+const BG_COLOR = '#09408B';     
+
 export default function FirstScreen({ navigation }: any) {
   const { t } = useLanguage();
   
@@ -239,12 +237,10 @@ export default function FirstScreen({ navigation }: any) {
           >
             <Text style={styles.appName}>{t('first.banner')}</Text>
             <View style={styles.titleBadge}>
-              <Text style={styles.titleBadgeText}>Yapay Zeka Destekli</Text>
+<Text style={styles.titleBadgeText}>{t('first.aiBadge')}</Text>
             </View>
             <Text style={styles.title}>{t('first.title')}</Text>
-            <Text style={styles.subtitle}>
-              7/24 yapay zeka destekli sağlık asistanınız
-            </Text>
+<Text style={styles.subtitle}>{t('first.subtitle')}</Text>
           </Animated.View>
 
           {/* Features */}
@@ -261,15 +257,15 @@ export default function FirstScreen({ navigation }: any) {
             <View style={styles.featureRow}>
               <View style={styles.feature}>
                 <MaterialIcons name="chat" size={24} color="#fff" />
-                <Text style={styles.featureText}>Anlık Danışma</Text>
-              </View>
+                <Text style={styles.featureText}>{t('first.featureInstant')}</Text>
+                </View>
               <View style={styles.feature}>
                 <MaterialIcons name="image-search" size={24} color="#fff" />
-                <Text style={styles.featureText}>Görüntü Analizi</Text>
-              </View>
+                    <Text style={styles.featureText}>{t('first.featureImageAnalysis')}</Text>
+                  </View>
               <View style={styles.feature}>
                 <MaterialIcons name="analytics" size={24} color="#fff" />
-                <Text style={styles.featureText}>Tahlil Yorumlama</Text>
+                <Text style={styles.featureText}>{t('first.featureLab')}</Text>
               </View>
             </View>
           </Animated.View>

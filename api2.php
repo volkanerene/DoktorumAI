@@ -13,10 +13,7 @@ function debugLog($message) {
 }
 
 // Database config
-$servername = "localhost";
-$username   = "prokocco_saglikasistanim";
-$password   = "PGyjzZZdYBvtaRWwHYJg";
-$dbname     = "prokocco_saglikasistanim";
+
 
 $conn = new mysqli($servername, $username, $password, $dbname);
 $conn->set_charset("utf8mb4");
@@ -60,7 +57,6 @@ function getUserProfile($userId) {
 }
 
 // GPT-4 Vision API Key
-$OPENAI_API_KEY = "..";
 
 /**
  * callOpenAI with GPT-4 Vision support
@@ -1346,20 +1342,90 @@ $language = isset($input['language']) ? $input['language'] : 'tr';
             // Here you would save to database and potentially send notifications
             echo json_encode(["success" => true, "message" => "SOS recorded", "debug" => $debug]);
             exit;
-
-        // Duty pharmacies
-        case 'nobetciEczaneler':
-            debugLog("nobetciEczaneler route");
-            $language = isset($input['language']) ? $input['language'] : 'tr';
-            $city = isset($_GET['city']) ? trim($_GET['city']) : '';
-            debugLog("city param: $city");
-            try {
-                $eczaneler = NobetciEczane::Find($city);
-                echo json_encode(["success" => true, "data" => $eczaneler, "debug" => $debug]);
-            } catch (Exception $e) {
-                echo json_encode(["error" => $e->getMessage(), "debug" => $debug]);
-            }
+// api2.php içinde nobetciEczaneler case'ini güncelleyin:
+case 'nobetciEczaneler':
+    debugLog("nobetciEczaneler route");
+    $language = isset($input['language']) ? $input['language'] : 'tr';
+    $city = isset($_GET['city']) ? trim($_GET['city']) : 'Istanbul';
+    debugLog("city param: $city");
+    
+    try {
+        // NosyAPI yerine collectapi kullanımı
+        $url = 'https://api.collectapi.com/health/dutyPharmacy?il=' . urlencode($city);
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'authorization: apikey ' . $apiKey,
+            'content-type: application/json'
+        ]);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        
+        if ($err) {
+            debugLog("API cURL error: $err");
+            echo json_encode(["error" => "API connection error", "debug" => $debug]);
             exit;
+        }
+        
+        if ($httpCode !== 200) {
+            debugLog("API HTTP error: $httpCode");
+            echo json_encode(["error" => "API error: HTTP $httpCode", "debug" => $debug]);
+            exit;
+        }
+        
+        $json = json_decode($response, true);
+        
+        if (!$json || !isset($json["result"])) {
+            // Örnek veri döndür (test için)
+            $mockData = [
+                [
+                    'name' => 'Merkez Eczanesi',
+                    'address' => 'Kadıköy, Bahariye Cad. No:45, İstanbul',
+                    'phone' => '0216 123 45 67',
+                    'lat' => 40.9876,
+                    'lng' => 29.0300
+                ],
+                [
+                    'name' => 'Yıldız Eczanesi',
+                    'address' => 'Beşiktaş, Barbaros Bulvarı No:123, İstanbul',
+                    'phone' => '0212 234 56 78',
+                    'lat' => 41.0456,
+                    'lng' => 29.0089
+                ],
+                [
+                    'name' => 'Sağlık Eczanesi',
+                    'address' => 'Üsküdar, Çamlıca Cad. No:78, İstanbul',
+                    'phone' => '0216 345 67 89',
+                    'lat' => 41.0234,
+                    'lng' => 29.0567
+                ]
+            ];
+            
+            echo json_encode(["success" => true, "data" => $mockData, "debug" => $debug]);
+            exit;
+        }
+        
+        $pharmacies = [];
+        foreach ($json["result"] as $p) {
+            $pharmacies[] = [
+                'name'    => $p['name'] ?? '-',
+                'address' => $p['address'] ?? '-',
+                'phone'   => $p['phone'] ?? '-',
+                'lat'     => isset($p['loc']) ? floatval(explode(',', $p['loc'])[0]) : null,
+                'lng'     => isset($p['loc']) ? floatval(explode(',', $p['loc'])[1]) : null,
+            ];
+        }
+        
+        echo json_encode(["success" => true, "data" => $pharmacies, "debug" => $debug]);
+    } catch (Exception $e) {
+        echo json_encode(["error" => $e->getMessage(), "debug" => $debug]);
+    }
+    exit;
 
         default:
             handleError("Invalid action.");

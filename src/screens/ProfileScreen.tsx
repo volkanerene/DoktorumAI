@@ -24,7 +24,7 @@ import ImageResizer from 'react-native-image-resizer';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
-
+const BG_COLOR = '#09408B';     
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
 const { width } = Dimensions.get('window');
 type Gender = 'male' | 'female' | 'other';
@@ -195,9 +195,8 @@ Alert.alert(t('common.error'), t('profile.photoUploadError'));
 
   /* -------------------- UI -------------------- */
   return (
-    <LinearGradient  colors={['#6B75D6','#46B168']} style={styles.container}>
-        {/*  ➕  yükleniyor overlay */}
-  {loading && (
+<View style={[styles.container, { backgroundColor: BG_COLOR }]}>
+    {loading && (
     <View style={styles.loadingOverlay}>
       <ActivityIndicator size="large" color="#fff" />
     </View>
@@ -272,7 +271,7 @@ Alert.alert(t('common.error'), t('profile.photoUploadError'));
           </View>
         </Animated.ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 

@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases from 'react-native-purchases';      // RevenueCat SDK
 
 type Props = StackScreenProps<RootStackParamList, 'Subscription'>;
+const BG_COLOR = '#09408B';     
 
 const { width } = Dimensions.get('window');
 
@@ -106,14 +107,16 @@ export default function SubscriptionScreen({ route, navigation }: Props) {
   const goHome = () =>
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Home', params: { userId, userName } }],
+      routes: [{ name: 'MainTabs', params: { userId, userName } }],
     });
 
   /* ------------------------------------------------------------------ */
   /*                               RENDER                               */
   /* ------------------------------------------------------------------ */
   return (
-      <><LinearGradient colors={['#6B75D6','#46B168']} style={styles.gradient}>
+      <>    
+      <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
+      
       <SafeAreaView style={styles.container}>
 
         {/* ────────── KAPAT (X) ────────── */}
@@ -183,7 +186,7 @@ export default function SubscriptionScreen({ route, navigation }: Props) {
           </Animatable.View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient><Modal visible={freeModal} transparent animationType="slide">
+    </View><Modal visible={freeModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>

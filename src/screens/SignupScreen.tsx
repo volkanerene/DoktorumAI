@@ -34,6 +34,7 @@ import SHA256 from 'crypto-js/sha256';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
+const BG_COLOR = '#09408B';     
 
 type SignupScreenProps = StackScreenProps<RootStackParamList, 'Signup'>;
 
@@ -142,78 +143,7 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
   /* -------------------------   API HANDLERS  ------------------------ */
   /* ------------------------------------------------------------------ */
 
-// SignupScreen.tsx - handleSignup fonksiyonunu güncelleyin
-const handleSignup = async () => {
-  // Validasyonlar
-  if (!name || name.trim().length < 2) {
-Alert.alert(t('common.error'), t('auth.nameTooShort'));
-    return;
-  }
-  
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email || !emailRegex.test(email)) {
-Alert.alert(t('common.error'), t('auth.invalidEmail'));
-    return;
-  }
-  
-  if (!password || password.length < 6) {
-Alert.alert(t('common.error'), t('auth.passwordTooShort'));
-    return;
-  }
-  
-  if (!termsAccepted) {
-    Alert.alert(t('common.error'), t('auth.termsRequired'));
-    return;
-  }
 
-  setLoading(true);
-  try {
-    const response = await axios.post(
-      `${SERVER_URL}?action=signup`,
-      {
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        language,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      }
-    );
-
-    console.log('Signup response:', response.data); // Debug için
-
-    if (response.data.success) {
-      Alert.alert(
-        t('common.success'), 
-        t('auth.signupSuccess'),
-        [
-          {
-            text: t('common.ok'),
-            onPress: () => navigation.navigate('Login')
-          }
-        ]
-      );
-    } else {
-      Alert.alert(t('common.error'), response.data.error || t('auth.signupError'));
-    }
-  } catch (error: any) {
-    console.error('Signup error:', error);
-    
-    if (error.response?.data?.error) {
-      Alert.alert(t('common.error'), error.response.data.error);
-    } else if (error.request) {
-Alert.alert(t('common.error'), t('auth.networkError'));
-    } else {
-      Alert.alert(t('common.error'), error.message || t('auth.serverError'));
-    }
-  } finally {
-    setLoading(false);
-  }
-};
 
   const handleGuestLogin = async () => {
     setLoading(true);
@@ -229,7 +159,7 @@ Alert.alert(t('common.error'), t('auth.networkError'));
       Alert.alert(t('common.success'), t('auth.guestSuccess'));
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Home', params: { userId: guestId, userName: guestName } }],
+        routes: [{ name: 'MainTabs', params: { userId: guestId, userName: guestName } }],
       });
     } catch {
       Alert.alert(t('common.error'), t('auth.guestError'));
@@ -275,7 +205,7 @@ Alert.alert(t('common.error'), t('auth.networkError'));
         Alert.alert(t('common.success'), `${t('common.welcome')}, ${apiRes.data.name}`);
         navigation.reset({
           index: 0,
-          routes: [{ name: 'Home', params: { userId: apiRes.data.user_id, userName: apiRes.data.name } }],
+          routes: [{ name: 'MainTabs', params: { userId: apiRes.data.user_id, userName: apiRes.data.name } }],
         });
       } else {
         Alert.alert(t('common.error'), apiRes.data.error || t('auth.signupError'));
@@ -286,77 +216,105 @@ Alert.alert(t('common.error'), t('auth.networkError'));
     }
   };
 
-  const handleAppleSignup = async () => {
-    try {
-      const rawNonce = uuidv4();
-      const state = uuidv4();
-      const hashedNonce = SHA256(rawNonce).toString();
+const handleAppleSignup = async () => {
+  try {
+    const rawNonce   = uuidv4();
+    const state      = uuidv4();
+    const hashedNonce = SHA256(rawNonce).toString();
+    const isNameGeneric = (n: string) => !n || /^apple\s+user$/i.test(n.trim());
 
-      const appleAuthRequestResponse = await appleAuth.performRequest({
-        requestedOperation: appleAuth.Operation.LOGIN,
-        requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
-        nonce: hashedNonce,
-        state,
-      });
+    /* 1. Apple oturumu aç */
+    const appleRes = await appleAuth.performRequest({
+      requestedOperation: appleAuth.Operation.LOGIN,
+      requestedScopes:    [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
+      nonce: hashedNonce,
+      state,
+    });
 
-      const credentialState = await appleAuth.getCredentialStateForUser(
-        appleAuthRequestResponse.user,
-      );
-
-      if (credentialState === appleAuth.State.AUTHORIZED) {
-        const { identityToken, user, fullName, email } = appleAuthRequestResponse;
-
-        if (!identityToken) {
-          Alert.alert(t('common.error'), 'Apple ID error');
-          return;
-        }
-
-        const payload = {
-          provider: 'apple',
-          token: identityToken,
-          user_id: user,
-          nonce: rawNonce,
-          email: email || '',
-          name: fullName
-            ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim()
-            : '',
-          language,
-        };
-
-        const res = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
-
-        if (res.data.success) {
-          await AsyncStorage.setItem(
-            'userData',
-            JSON.stringify({ userId: res.data.user_id, userName: res.data.name, userType: 'social' }),
-          );
-          Alert.alert(t('common.success'), `${t('common.welcome')}, ${res.data.name}`);
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Home', params: { userId: res.data.user_id, userName: res.data.name } }],
-          });
-        } else {
-          Alert.alert(t('common.error'), res.data.error || t('auth.signupError'));
-        }
-      } else {
-        Alert.alert(t('common.error'), 'Apple auth error');
-      }
-    } catch (error: any) {
-      if (error.code !== appleAuth.Error.CANCELED)
-        Alert.alert(t('common.error'), t('auth.signupError'));
+    /* 2. Yetkilendirme durumu kontrolü */
+    const credState = await appleAuth.getCredentialStateForUser(appleRes.user);
+    if (credState !== appleAuth.State.AUTHORIZED) {
+      Alert.alert(t('common.error'), 'Apple auth error');
+      return;
     }
-  };
 
-  /* ------------------------------------------------------------------ */
-  /* -----------------------------  UI  ------------------------------- */
-  /* ------------------------------------------------------------------ */
+    const { identityToken, user, fullName, email } = appleRes;
+    if (!identityToken) {
+      Alert.alert(t('common.error'), 'Apple ID error');
+      return;
+    }
 
+    /* 3. Backend’e gönder */
+    const payload = {
+      provider: 'apple',
+      token: identityToken,
+      user_id: user,
+      nonce: rawNonce,
+      email: email ?? '',
+      name:  fullName ? `${fullName.givenName ?? ''} ${fullName.familyName ?? ''}`.trim() : '',
+      language,
+    };
+
+    const res = await axios.post(`${SERVER_URL}?action=loginSocial`, payload);
+    if (!res.data.success) {
+      Alert.alert(t('common.error'), res.data.error || t('auth.signupError'));
+      return;
+    }
+
+    /* 4. Kullanıcı verisini sakla */
+    await AsyncStorage.setItem(
+      'userData',
+      JSON.stringify({
+        userId:   res.data.user_id,
+        userName: res.data.name,
+        userType: 'social',
+      }),
+    );
+
+    /* 5. Profil & onboarding kontrolleri */
+    const profileRes = await axios.get(
+      `${SERVER_URL}?action=getProfile&user_id=${res.data.user_id}`,
+    );
+
+    const answers = profileRes.data?.profile?.answers ?? {};
+    const hasCompletedOnboarding = !!(answers.birthDate && answers.gender);
+    const needsNameFix          = isNameGeneric(res.data.name);
+
+    if (!hasCompletedOnboarding || needsNameFix) {
+      navigation.reset({
+        index: 0,
+        routes: [{
+          name: 'Onboarding',
+          params: {
+            userId:        String(res.data.user_id),
+            userName:      res.data.name,
+            allowNameEdit: true,
+          },
+        }],
+      });
+      return;
+    }
+
+    /* 6. Abonelik ekranı gösterildi mi? */
+    const shown = await AsyncStorage.getItem(
+      `subscription_shown_${res.data.user_id}`,
+    );
+    navigation.reset({
+      index: 0,
+      routes: [{
+        name: shown ? 'MainTabs' : 'Subscription',
+        params: { userId: String(res.data.user_id), userName: res.data.name },
+      }],
+    });
+  } catch (error: any) {
+    if (error.code !== appleAuth.Error.CANCELED) {
+      Alert.alert(t('common.error'), t('auth.signupError'));
+    }
+  }
+};
   return (
-    <LinearGradient
-      colors={['#6B75D6','#46B168']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}>
+
+    <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -466,16 +424,14 @@ Alert.alert(t('common.error'), t('auth.networkError'));
                 </Text>
               </TouchableOpacity>
 
-              {/* Signup Button */}
-              <TouchableOpacity style={styles.signupButton} onPress={handleSignup} disabled={loading}>
-                <LinearGradient colors={['#C8FF00', '#A8E000']} style={styles.signupGradient}>
-                  {loading ? (
-                    <ActivityIndicator color="#000" />
-                  ) : (
-                    <Text style={styles.signupButtonText}>{t('auth.signup')}</Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+  <TouchableOpacity
+    style={styles.guestButton2}
+    activeOpacity={0.85}
+    onPress={() => navigation.navigate('Signup')}
+  >
+    <Text style={styles.guestButtonText2}>{t('auth.signup')}</Text>
+    <MaterialIcons name="arrow-forward-ios" size={20} color="#667eea" />
+  </TouchableOpacity>
 
               {/* Guest */}
               <TouchableOpacity style={styles.guestButton} onPress={handleGuestLogin}>
@@ -538,13 +494,10 @@ Alert.alert(t('common.error'), t('auth.networkError'));
           </View>
         </View>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* ---------------------------  STYLES  ----------------------------- */
-/* ------------------------------------------------------------------ */
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -669,5 +622,22 @@ const styles = StyleSheet.create({
   modalClose: { padding: 15, alignItems: 'center', borderTopWidth: 1, borderColor: '#eee' },
   modalCloseText: { color: '#667eea', fontSize: 16, fontWeight: '600' },
   logoImage: { width: 70, height: 70, resizeMode: 'contain' },
+      guestButton2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    borderWidth: 2,
+    borderColor: '#667eea',
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginBottom: 20,
+    gap: 8,
+  },
+  guestButtonText2: {
+    color: '#667eea',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 
 });

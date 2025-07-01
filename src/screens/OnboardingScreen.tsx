@@ -24,6 +24,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../AppNavigation';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../i18n/translations';
+const BG_COLOR = '#09408B';     
 
 type OnboardingScreenProps = StackScreenProps<RootStackParamList, 'Onboarding'>;
 const SERVER_URL = 'https://www.prokoc2.com/api2.php';
@@ -35,11 +36,11 @@ interface UserHealthData {
   importantDiseases: string[]; // String array olarak değiştir
   medications: string[]; // String array olarak değiştir
   hadSurgery: boolean;
-  surgeryDetails: string;
   height?: string;
   weight?: string;
   bloodType?: string;
-  allergies?: string;
+  allergies: string[];
+  displayName?: string;
 }
 
 interface StepDefinition {
@@ -53,7 +54,8 @@ interface StepDefinition {
     | 'number'
     | 'disease-select'
     | 'medication-select'
-    | 'surgery-select';
+    | 'surgery-select'
+    | 'allergy-select';
   field: keyof UserHealthData;
   /* opsiyoneller */
   options?: { value: string; label: string }[];
@@ -115,7 +117,7 @@ const DISEASE_MEDICATION_MAP: Record<string, string[]> = {
 
 /* ================================================================ */
 export default function OnboardingScreen({ route, navigation }: OnboardingScreenProps) {
-  const { userId, userName } = route.params;
+const { userId, userName, allowNameEdit = false } = route.params;
   const [surgerySearch, setSurgerySearch]               = useState('');
 const [showOtherSurgeryInput, setShowOtherSurgeryInput] = useState(false);
 const [otherSurgery, setOtherSurgery]                 = useState('');
@@ -129,7 +131,14 @@ const [otherSurgery, setOtherSurgery]                 = useState('');
   /* ---------- STATE ---------- */
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading]        = useState(false);
-
+const [allergySearch, setAllergySearch] = useState('');
+const filteredAllergies = useMemo(() => {
+  const list = Object.keys(translations[language].onboarding.allergiesDict);
+  if (!allergySearch) return list;
+  return list.filter(k =>
+    t(`onboarding.allergiesDict.${k}`).toLowerCase().includes(allergySearch.toLowerCase())
+  );
+}, [allergySearch, language, t]);
   // Modal tarih seçici için
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDate, setTempDate]             = useState<Date>(new Date());
@@ -140,19 +149,19 @@ const filteredSurgeries = useMemo(() => {
     t(`onboarding.surgeriesDict.${k}`).toLowerCase().includes(surgerySearch.toLowerCase())
   );
 }, [surgerySearch, language, t]);
-  const [formData, setFormData] = useState<UserHealthData>({
-    birthDate: new Date(2000, 0, 1),
-    gender: 'male',
-    importantDiseases: [], // Array olarak başlat
-    medications: [], // Array olarak başlat
-    hadSurgery: false,
-    surgeryDetails: '',
-    surgeries: [],
-    height: '',
-    weight: '',
-    bloodType: '',
-    allergies: '',
-  });
+const [formData, setFormData] = useState<UserHealthData>({
+  birthDate: new Date(2000, 0, 1),
+  gender: 'male',
+  importantDiseases: [],
+  medications: [],
+  hadSurgery: false,
+  surgeries: [],
+  height: '',
+  weight: '',
+  bloodType: '',
+  allergies: [],
+  displayName: userName || '',                 // 🔧 dizi
+});
     const filteredDiseases = useMemo(() => {
     const diseases = Object.keys(translations[language].onboarding.diseasesDict);
     if (!diseaseSearch) return diseases;
@@ -161,29 +170,37 @@ const filteredSurgeries = useMemo(() => {
       t(`onboarding.diseasesDict.${key}`).toLowerCase().includes(diseaseSearch.toLowerCase())
     );
   }, [diseaseSearch, language, t]);
+    const [displayName, setDisplayName] = useState(userName || '');
 
-    // İlaç listesini filtrele ve öneri yap
-  const filteredMedications = useMemo(() => {
-    const medications = Object.keys(translations[language].onboarding.medicationsDict);
-    
-    // Seçilen hastalıklara göre önerilen ilaçları bul
-    const suggestedMeds = new Set<string>();
-    formData.importantDiseases.forEach(disease => {
-      const meds = DISEASE_MEDICATION_MAP[disease] || [];
-      meds.forEach(med => suggestedMeds.add(med));
-    });
-    
-    if (!medicationSearch) {
-      // Önce önerilen ilaçları, sonra diğerlerini göster
-      return [
-        ...Array.from(suggestedMeds),
-        ...medications.filter(m => !suggestedMeds.has(m))
-      ];
-    }
-        return medications.filter(key => 
-      t(`onboarding.medicationsDict.${key}`).toLowerCase().includes(medicationSearch.toLowerCase())
-    );
-  }, [medicationSearch, formData.importantDiseases, language, t]);
+// 1) displayName gerekiyorsa EN TEPEYE ekleyin: 
+// const [displayName, setDisplayName] = useState(userName || '');
+
+const filteredMedications = useMemo(() => {
+  const medications = Object.keys(
+    translations[language].onboarding.medicationsDict,
+  );
+
+  // Seçili hastalıklara göre önerilen ilaçlar
+  const suggested = new Set<string>();
+  formData.importantDiseases.forEach(d =>
+    (DISEASE_MEDICATION_MAP[d] || []).forEach(s => suggested.add(s)),
+  );
+
+  // Arama yoksa önerilenler + diğerleri
+  if (!medicationSearch) {
+    return [
+      ...Array.from(suggested),
+      ...medications.filter(m => !suggested.has(m)),
+    ];
+  }
+
+  // Filtreli arama
+  return medications.filter(key =>
+    t(`onboarding.medicationsDict.${key}`)
+      .toLowerCase()
+      .includes(medicationSearch.toLowerCase()),
+  );
+}, [medicationSearch, formData.importantDiseases, language, t]);
   const renderSurgerySelect = () => (
   <View style={styles.multiSelectContainer}>
     <TextInput
@@ -499,11 +516,19 @@ const filteredSurgeries = useMemo(() => {
     </View>
   );
   /* ---------- STEP DEFINITIONS (çevrim-içi) ---------- */
+const nameStep: StepDefinition = {
+  title: t('onboarding.displayName'),
+  type:  'text',
+  field: 'displayName',
+  placeholder: t('onboarding.namePlaceholder'),
+};
 const requiredSteps: StepDefinition[] = [
-  { title: t('onboarding.birthDate'),        type: 'date',  field: 'birthDate' },
+  nameStep,   // ⬅️ her zaman sorulsun
+  { title: t('onboarding.birthDate'), type: 'date', field: 'birthDate' },
 
-  { title: t('onboarding.gender'),
-    type: 'select',
+  {
+    title: t('onboarding.gender'),
+    type:  'select',
     field: 'gender',
     options: [
       { value: 'male',   label: t('onboarding.male')   },
@@ -529,12 +554,10 @@ const optionalSteps: StepDefinition[] = [
       { value: 'AB-',label: 'AB-'}, { value: '0+', label: '0+'}, { value: '0-',  label: '0-' },
     ],
   },
-  { title: t('onboarding.allergies'),
-    type: 'text',
-    field: 'allergies',
-    placeholder: t('onboarding.allergiesPlaceholder'),
-    multiline: true,
-  },
+{ title: t('onboarding.allergies'),
+  type:  'allergy-select',
+  field: 'allergies',
+},
 ];
 
   /* ---------- STEP BUILD ---------- */
@@ -546,20 +569,12 @@ if (formData.hadSurgery) {
     type:  'surgery-select',
     field: 'surgeries',
   });
-  // İstersen ameliyat ayrıntısı adımını da ekle
-  allSteps.push({
-    title: t('onboarding.surgeryDetails'),
-    type:  'text',
-    field: 'surgeryDetails',
-    placeholder: t('onboarding.surgeryDetailsPlaceholder'),
-    multiline: true,
-  });
 }
   allSteps.push(...optionalSteps);
   const currentStepData = allSteps[currentStep] as StepDefinition;
   const isLastStep      = currentStep === allSteps.length - 1;
-  const isOptionalStep  = currentStep >= requiredSteps.length + (formData.hadSurgery ? 1 : 0);
-
+const extraRequired = formData.hadSurgery ? 1 : 0;
+const isOptionalStep = currentStep >= requiredSteps.length + extraRequired;
   /* ---------- HELPERS ---------- */
   const openBirthDatePicker = () => {
     setTempDate(formData.birthDate);
@@ -603,9 +618,10 @@ React.useEffect(() => {
       // Array'leri string'e çevir backend için
       const healthData = {
         ...formData,
-        importantDiseases: formData.importantDiseases.join(', '),
-        medications: formData.medications.join(', '),
-        surgeries:         (formData.surgeries || []).join(', '),
+  importantDiseases: formData.importantDiseases.join(', '),
+  medications:       formData.medications.join(', '),
+  surgeries:         (formData.surgeries || []).join(', '),
+  allergies:         formData.allergies.join(', '),
       };
       
       const res = await axios.post(`${SERVER_URL}?action=saveHealthData`, {
@@ -627,7 +643,64 @@ React.useEffect(() => {
       setLoading(false);
     }
   };
+const renderAllergySelect = () => (
+  <View style={styles.multiSelectContainer}>
+    {/* arama kutusu */}
+    <TextInput
+      style={styles.searchInput}
+      placeholder={t('onboarding.searchAllergy')}
+      placeholderTextColor="#999"
+      value={allergySearch}
+      onChangeText={setAllergySearch}
+    />
 
+    <ScrollView style={styles.optionsList} showsVerticalScrollIndicator={false}>
+      {filteredAllergies.map(key => {
+        const selected = formData.allergies.includes(key);
+        return (
+          <TouchableOpacity
+            key={key}
+            style={[
+              styles.multiSelectOption,
+              selected && styles.multiSelectOptionSelected,
+            ]}
+            onPress={() => {
+              const arr = [...formData.allergies];
+              if (selected) arr.splice(arr.indexOf(key), 1);
+              else          arr.push(key);
+              setFormData({ ...formData, allergies: arr });
+            }}
+          >
+            <Text style={[
+              styles.multiSelectText,
+              selected && styles.multiSelectTextSelected,
+            ]}>{t(`onboarding.allergiesDict.${key}`)}</Text>
+            {selected && <MaterialIcons name="check" size={20} color="#fff" />}
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+
+    {/* seçilenleri chip olarak göster */}
+    {formData.allergies.length > 0 && (
+      <View style={styles.selectedItems}>
+        {formData.allergies.map((al, i) => (
+          <View key={i} style={styles.selectedChip}>
+            <Text style={styles.selectedChipText}>
+              {t(`onboarding.allergiesDict.${al}`)}
+            </Text>
+            <TouchableOpacity onPress={() => {
+              const arr = formData.allergies.filter((_, idx) => idx !== i);
+              setFormData({ ...formData, allergies: arr });
+            }}>
+              <MaterialIcons name="close" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+    )}
+  </View>
+);
   /* ---------- RENDER STEP ---------- */
   const renderStepContent = () => {
     switch (currentStepData.type) {
@@ -638,6 +711,8 @@ React.useEffect(() => {
   return renderSurgerySelect();
       case 'medication-select':
         return renderMedicationSelect();
+        case 'allergy-select':
+  return renderAllergySelect();
       case 'date':
         return (
           <View style={styles.inputContainer}>
@@ -658,6 +733,9 @@ React.useEffect(() => {
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                         maximumDate={new Date()}
                         minimumDate={new Date(1920, 0, 1)}
+                        themeVariant="light"        // iOS 13+  → açık tema zorla
+                        textColor="#000"            // iOS       → rakamlar siyah
+                        accentColor="#667eea"       // iOS 15+   → seçici şerit rengi
                         onChange={(_, date) => date && setTempDate(date)}
                         style={{ alignSelf: 'center' }}
                       />
@@ -752,7 +830,7 @@ React.useEffect(() => {
 
   /* ---------- UI ---------- */
   return (
-  <LinearGradient colors={['#6B75D6', '#46B168']} style={styles.gradient}>
+    <View style={[styles.container, { backgroundColor: BG_COLOR }]}>
     <SafeAreaView style={styles.container}>
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoid}>
@@ -812,7 +890,7 @@ React.useEffect(() => {
         </KeyboardAvoidingView>
      
     </SafeAreaView>
-     </LinearGradient>
+     </View>
   );
 }
 

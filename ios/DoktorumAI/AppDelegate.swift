@@ -2,7 +2,7 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
-
+import RNBootSplash          // ✅
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -15,12 +15,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+
     let delegate = ReactNativeDelegate()
-    let factory = RCTReactNativeFactory(delegate: delegate)
+    let factory  = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
 
     reactNativeDelegate = delegate
-    reactNativeFactory = factory
+    reactNativeFactory  = factory
 
     window = UIWindow(frame: UIScreen.main.bounds)
 
@@ -30,14 +31,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       launchOptions: launchOptions
     )
 
+    // 🔑  BootSplash başlat
+    if let rootView = window?.rootViewController?.view {
+      RNBootSplash.initWithStoryboard("BootSplash", rootView: rootView)
+    }
+
     return true
   }
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
-  override func sourceURL(for bridge: RCTBridge) -> URL? {
-    self.bundleURL()
-  }
+  override func sourceURL(for bridge: RCTBridge) -> URL? { self.bundleURL() }
 
   override func bundleURL() -> URL? {
 #if DEBUG

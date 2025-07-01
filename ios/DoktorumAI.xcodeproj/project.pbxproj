@@ -10,16 +10,20 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		A505BFCE8D924B3AA706771E /* BootSplash.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 16B9DDBB2CC74960882818E5 /* BootSplash.storyboard */; };
 		B79097DACC59CBA42567C2E7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		C41239F6DD8AD663B01DE948 /* libPods-DoktorumAI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0672E7F8E07ECFE66D20E799 /* libPods-DoktorumAI.a */; };
+		FAD43CD6A0CA48FD95AFB546 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 02EFFF571F7147D99DCECAFE /* Colors.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		02EFFF571F7147D99DCECAFE /* Colors.xcassets */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = folder.assetcatalog; name = Colors.xcassets; path = DoktorumAI/Colors.xcassets; sourceTree = "<group>"; };
 		0672E7F8E07ECFE66D20E799 /* libPods-DoktorumAI.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DoktorumAI.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07F961A680F5B00A75B9A /* DoktorumAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DoktorumAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DoktorumAI/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DoktorumAI/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = DoktorumAI/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		16B9DDBB2CC74960882818E5 /* BootSplash.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = BootSplash.storyboard; path = DoktorumAI/BootSplash.storyboard; sourceTree = "<group>"; };
 		335FCDE4580649B16E64D1BB /* Pods-DoktorumAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DoktorumAI.release.xcconfig"; path = "Target Support Files/Pods-DoktorumAI/Pods-DoktorumAI.release.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DoktorumAI/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = DoktorumAI/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -49,6 +53,8 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+				16B9DDBB2CC74960882818E5 /* BootSplash.storyboard */,
+				02EFFF571F7147D99DCECAFE /* Colors.xcassets */,
 			);
 			name = DoktorumAI;
 			sourceTree = "<group>";
@@ -163,6 +169,8 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				B79097DACC59CBA42567C2E7 /* PrivacyInfo.xcprivacy in Resources */,
+				A505BFCE8D924B3AA706771E /* BootSplash.storyboard in Resources */,
+				FAD43CD6A0CA48FD95AFB546 /* Colors.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
